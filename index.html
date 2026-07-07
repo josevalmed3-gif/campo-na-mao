@@ -290,6 +290,8 @@ function RebanhoApp() {
   const [avesVendas, setAvesVendas] = useState([]);
   const [insumos, setInsumos] = useState([]);
   const [comprasInsumos, setComprasInsumos] = useState([]);
+  const [funcionarios, setFuncionarios] = useState([]);
+  const [pagamentosMaoObra, setPagamentosMaoObra] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [banner, setBanner] = useState(null); // { type, text }
 
@@ -527,6 +529,14 @@ function RebanhoApp() {
       try {
         const ci = await apiFetch(`/rest/v1/insumos_compras?select=*&order=data.desc&limit=1000`);
         setComprasInsumos(ci || []);
+      } catch (e) {}
+      try {
+        const fn = await apiFetch(`/rest/v1/funcionarios?select=*&order=nome.asc`);
+        setFuncionarios(fn || []);
+      } catch (e) {}
+      try {
+        const pg = await apiFetch(`/rest/v1/pagamentos_mao_obra?select=*&order=data.desc&limit=1000`);
+        setPagamentosMaoObra(pg || []);
       } catch (e) {}
       try {
         const u = await apiFetch(`/rest/v1/profiles?select=*&order=nome.asc`);
@@ -804,6 +814,8 @@ function RebanhoApp() {
             production={production}
             insumos={insumos}
             comprasInsumos={comprasInsumos}
+            funcionarios={funcionarios}
+            pagamentosMaoObra={pagamentosMaoObra}
             apiFetch={apiFetch}
             reload={loadAll}
             setBanner={setBanner}
@@ -842,6 +854,7 @@ function RebanhoApp() {
             avesVendas={avesVendas}
             insumos={insumos}
             comprasInsumos={comprasInsumos}
+            pagamentosMaoObra={pagamentosMaoObra}
           />
         )}
         {tab === "melhoramento" && profile?.role === "administrador" && (
@@ -7234,6 +7247,7 @@ function IndicadoresTab({
   avesVendas,
   insumos,
   comprasInsumos,
+  pagamentosMaoObra,
 }) {
   const hoje = todayISO();
   const inicioMes = hoje.slice(0, 8) + "01";
@@ -7462,24 +7476,54 @@ function IndicadoresTab({
 
       {(() => {
         const comprasPeriodoInsumos = (comprasInsumos || []).filter((c) => inRange(c.data));
+        const pagamentosPeriodoMaoObra = (pagamentosMaoObra || []).filter((p) => inRange(p.data));
         const custoPorCategoria = { leite: 0, corte: 0, bezerro: 0, aves: 0, geral: 0 };
         comprasPeriodoInsumos.forEach((c) => {
           custoPorCategoria[c.categoria_animal || "geral"] = (custoPorCategoria[c.categoria_animal || "geral"] || 0) + Number(c.valor_total || 0);
         });
+        const maoObraPorCategoria = { leite: 0, corte: 0, bezerro: 0, aves: 0, geral: 0 };
+        pagamentosPeriodoMaoObra.forEach((p) => {
+          maoObraPorCategoria[p.categoria_animal || "geral"] = (maoObraPorCategoria[p.categoria_animal || "geral"] || 0) + Number(p.valor || 0);
+        });
         const receitaAvesPeriodo = (avesVendas || []).filter((v) => inRange(v.data)).reduce((s, v) => s + Number(v.valor_total || 0), 0);
-        const lucroLeite = receitaLeite - custoPorCategoria.leite;
-        const lucroCorteLiquido = receitaVendaGado - custoAquisicaoVendidos - custoPorCategoria.corte;
-        const lucroAves = receitaAvesPeriodo - custoPorCategoria.aves;
+        const lucroLeite = receitaLeite - custoPorCategoria.leite - maoObraPorCategoria.leite;
+        const lucroCorteLiquido = receitaVendaGado - custoAquisicaoVendidos - custoPorCategoria.corte - maoObraPorCategoria.corte;
+        const lucroAves = receitaAvesPeriodo - custoPorCategoria.aves - maoObraPorCategoria.aves;
         return (
-          <IndicadoresGrupo titulo="Custo x lucro por categoria (insumos incluídos)">
-            <IndicadorCard label="Leite: custo de insumos" value={fmtR(custoPorCategoria.leite)} sub={`Receita: ${fmtR(receitaLeite)}`} />
+          <IndicadoresGrupo titulo="Custo x lucro por categoria (insumos + mão de obra)">
+            <IndicadorCard
+              label="Leite: custos (insumos + mão de obra)"
+              value={fmtR(custoPorCategoria.leite + maoObraPorCategoria.leite)}
+              sub={`Receita: ${fmtR(receitaLeite)}`}
+            />
             <IndicadorCard label="Leite: lucro líquido" value={fmtR(lucroLeite)} color={lucroLeite >= 0 ? "#5BAA47" : "#B5453A"} />
-            <IndicadorCard label="Corte: custo de insumos" value={fmtR(custoPorCategoria.corte)} sub={`Receita: ${fmtR(receitaVendaGado)}`} />
-            <IndicadorCard label="Corte: lucro líquido" value={fmtR(lucroCorteLiquido)} sub="Receita − compra dos animais − insumos" color={lucroCorteLiquido >= 0 ? "#5BAA47" : "#B5453A"} />
-            <IndicadorCard label="Aves: custo de insumos" value={fmtR(custoPorCategoria.aves)} sub={`Receita: ${fmtR(receitaAvesPeriodo)}`} />
+            <IndicadorCard
+              label="Corte: custos (insumos + mão de obra)"
+              value={fmtR(custoPorCategoria.corte + maoObraPorCategoria.corte)}
+              sub={`Receita: ${fmtR(receitaVendaGado)}`}
+            />
+            <IndicadorCard
+              label="Corte: lucro líquido"
+              value={fmtR(lucroCorteLiquido)}
+              sub="Receita − compra dos animais − insumos − mão de obra"
+              color={lucroCorteLiquido >= 0 ? "#5BAA47" : "#B5453A"}
+            />
+            <IndicadorCard
+              label="Aves: custos (insumos + mão de obra)"
+              value={fmtR(custoPorCategoria.aves + maoObraPorCategoria.aves)}
+              sub={`Receita: ${fmtR(receitaAvesPeriodo)}`}
+            />
             <IndicadorCard label="Aves: lucro líquido" value={fmtR(lucroAves)} color={lucroAves >= 0 ? "#5BAA47" : "#B5453A"} />
-            <IndicadorCard label="Bezerro(a): custo de insumos" value={fmtR(custoPorCategoria.bezerro)} sub="Sem venda direta (some ao virar corte)" />
-            <IndicadorCard label="Custos gerais (não alocados)" value={fmtR(custoPorCategoria.geral)} sub="Insumos sem categoria específica" />
+            <IndicadorCard
+              label="Bezerro(a): custos (insumos + mão de obra)"
+              value={fmtR(custoPorCategoria.bezerro + maoObraPorCategoria.bezerro)}
+              sub="Sem venda direta (some ao virar corte)"
+            />
+            <IndicadorCard
+              label="Custos gerais (não alocados)"
+              value={fmtR(custoPorCategoria.geral + maoObraPorCategoria.geral)}
+              sub="Insumos + mão de obra sem categoria específica"
+            />
           </IndicadoresGrupo>
         );
       })()}
@@ -8876,7 +8920,7 @@ const CATEGORIA_INSUMO_LABELS = { racao: "Ração", medicamento: "Medicamento", 
 const CATEGORIA_ANIMAL_LABELS = { leite: "Leite", corte: "Corte", bezerro: "Bezerro(a)", aves: "Aves", geral: "Geral (fazenda toda)" };
 const CATEGORIA_ANIMAL_COLORS = { leite: "#B8862E", corte: "#B5453A", bezerro: "#3E7C99", aves: "#8C6A3F", geral: "#6E7A61" };
 
-function FinanceiroTab({ financeiro, entregas, production, insumos, comprasInsumos, apiFetch, reload, setBanner }) {
+function FinanceiroTab({ financeiro, entregas, production, insumos, comprasInsumos, funcionarios, pagamentosMaoObra, apiFetch, reload, setBanner }) {
   const [subTab, setSubTab] = useState("ciclos");
 
   const btnStyle = (active) => ({
@@ -8900,10 +8944,16 @@ function FinanceiroTab({ financeiro, entregas, production, insumos, comprasInsum
         <button onClick={() => setSubTab("insumos")} style={btnStyle(subTab === "insumos")}>
           Insumos
         </button>
+        <button onClick={() => setSubTab("maoobra")} style={btnStyle(subTab === "maoobra")}>
+          Mão de obra
+        </button>
       </div>
 
       {subTab === "ciclos" && <CicloLeiteSecao financeiro={financeiro} entregas={entregas} production={production} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
       {subTab === "insumos" && <InsumosSecao insumos={insumos} compras={comprasInsumos} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
+      {subTab === "maoobra" && (
+        <MaoDeObraSecao funcionarios={funcionarios} pagamentos={pagamentosMaoObra} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
+      )}
     </div>
   );
 }
@@ -9172,6 +9222,354 @@ function CatalogoInsumosSecao({ insumos, apiFetch, reload, setBanner }) {
             </button>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+const TIPO_PAGAMENTO_LABELS = { salario: "Salário", diaria: "Diária", hora_extra: "Hora extra", bonus: "Bônus", vale: "Vale", outro: "Outro" };
+const TIPO_FUNCIONARIO_LABELS = { mensalista: "Mensalista", diarista: "Diarista", tarefeiro: "Tarefeiro", outro: "Outro" };
+
+function MaoDeObraSecao({ funcionarios, pagamentos, apiFetch, reload, setBanner }) {
+  const [secao, setSecao] = useState("pagamentos");
+
+  const pillStyle = (active) => ({
+    background: active ? "#8C6A3F" : "#FFFFFF",
+    color: active ? "#FFFFFF" : "#6E7A61",
+    border: "1px solid " + (active ? "#8C6A3F" : "rgba(11,61,46,0.14)"),
+    borderRadius: 20,
+    padding: "6px 14px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  });
+
+  const hoje = todayISO();
+  const mesAtual = hoje.slice(0, 7);
+  const pagamentosMes = pagamentos.filter((p) => p.data.slice(0, 7) === mesAtual);
+  const totalPorCategoria = { leite: 0, corte: 0, bezerro: 0, aves: 0, geral: 0 };
+  pagamentosMes.forEach((p) => {
+    totalPorCategoria[p.categoria_animal || "geral"] = (totalPorCategoria[p.categoria_animal || "geral"] || 0) + Number(p.valor || 0);
+  });
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <button onClick={() => setSecao("pagamentos")} style={pillStyle(secao === "pagamentos")}>
+          Pagamentos
+        </button>
+        <button onClick={() => setSecao("funcionarios")} style={pillStyle(secao === "funcionarios")}>
+          Funcionários
+        </button>
+      </div>
+
+      {secao === "pagamentos" && (
+        <>
+          <div style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: "#6E7A61", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Mão de obra este mês, por categoria</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {Object.entries(CATEGORIA_ANIMAL_LABELS).map(([k, label]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: CATEGORIA_ANIMAL_COLORS[k] }}>{label}</span>
+                  <span style={{ fontWeight: 600 }}>R$ {totalPorCategoria[k].toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <PagamentoMaoObraForm funcionarios={funcionarios} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
+          <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+            {pagamentos.length === 0 && <EmptyState text="Nenhum pagamento de mão de obra registrado ainda." />}
+            {pagamentos.map((p) => {
+              const funcionario = funcionarios.find((f) => f.id === p.funcionario_id);
+              return (
+                <div key={p.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{funcionario ? funcionario.nome : "Funcionário removido"}</div>
+                      <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 2 }}>
+                        {formatDataBR(p.data)} • {TIPO_PAGAMENTO_LABELS[p.tipo_pagamento] || p.tipo_pagamento}
+                        {p.quantidade ? ` • ${p.quantidade}` : ""}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: 700 }}>R$ {Number(p.valor).toFixed(2)}</div>
+                      <Badge color={CATEGORIA_ANIMAL_COLORS[p.categoria_animal || "geral"]}>{CATEGORIA_ANIMAL_LABELS[p.categoria_animal || "geral"]}</Badge>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {secao === "funcionarios" && <FuncionariosSecao funcionarios={funcionarios} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
+    </div>
+  );
+}
+
+function PagamentoMaoObraForm({ funcionarios, apiFetch, reload, setBanner }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ funcionario_id: "", data: todayISO(), tipo_pagamento: "diaria", quantidade: "", valor: "", categoria_animal: "geral", observacoes: "" });
+  const [saving, setSaving] = useState(false);
+
+  const funcionariosAtivos = funcionarios.filter((f) => f.ativo !== false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.funcionario_id) {
+      setBanner({ type: "error", text: "Selecione o funcionário." });
+      return;
+    }
+    if (!form.valor) {
+      setBanner({ type: "error", text: "Informe o valor pago." });
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch(`/rest/v1/pagamentos_mao_obra`, {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({
+          funcionario_id: form.funcionario_id,
+          data: form.data,
+          tipo_pagamento: form.tipo_pagamento,
+          quantidade: form.quantidade !== "" ? Number(form.quantidade) : null,
+          valor: Number(form.valor),
+          categoria_animal: form.categoria_animal,
+          observacoes: form.observacoes || null,
+        }),
+      });
+      setBanner({ type: "success", text: "Pagamento registrado." });
+      setForm({ funcionario_id: "", data: todayISO(), tipo_pagamento: "diaria", quantidade: "", valor: "", categoria_animal: "geral", observacoes: "" });
+      setShowForm(false);
+      reload();
+    } catch (err) {
+      setBanner({ type: "error", text: "Erro ao salvar: " + err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <SectionTitle>Pagamentos de mão de obra</SectionTitle>
+        <IconButton onClick={() => setShowForm((v) => !v)} active={showForm} />
+      </div>
+
+      {showForm && (
+        <form onSubmit={submit} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 14, padding: 18, marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>Funcionário</span>
+            <select
+              value={form.funcionario_id}
+              onChange={(e) => setForm({ ...form, funcionario_id: e.target.value })}
+              style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
+            >
+              <option value="">Selecione...</option>
+              {funcionariosAtivos.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+          {funcionarios.length === 0 && <div style={{ fontSize: 12, color: "#B8862E" }}>Cadastre um funcionário em "Funcionários" primeiro.</div>}
+
+          <Field label="Data" type="date" value={form.data} onChange={(v) => setForm({ ...form, data: v })} required />
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>Tipo de pagamento</span>
+            <select
+              value={form.tipo_pagamento}
+              onChange={(e) => setForm({ ...form, tipo_pagamento: e.target.value })}
+              style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
+            >
+              {Object.entries(TIPO_PAGAMENTO_LABELS).map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <Field label="Quantidade (dias/horas, opcional)" type="number" value={form.quantidade} onChange={(v) => setForm({ ...form, quantidade: v })} placeholder="Ex: 1" />
+          <Field label="Valor pago (R$)" type="number" value={form.valor} onChange={(v) => setForm({ ...form, valor: v })} placeholder="0.00" required />
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>Alocar custo para</span>
+            <select
+              value={form.categoria_animal}
+              onChange={(e) => setForm({ ...form, categoria_animal: e.target.value })}
+              style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
+            >
+              {Object.entries(CATEGORIA_ANIMAL_LABELS).map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div style={{ fontSize: 11, color: "#6E7A61" }}>
+            Se o funcionário trabalha em várias frentes, lance separado ou use "Geral" — assim o custo x lucro por categoria fica mais preciso.
+          </div>
+
+          <Field label="Observações" value={form.observacoes} onChange={(v) => setForm({ ...form, observacoes: v })} />
+          <SaveButton saving={saving} />
+        </form>
+      )}
+    </div>
+  );
+}
+
+function FuncionariosSecao({ funcionarios, apiFetch, reload, setBanner }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ nome: "", tipo: "diarista", funcao: "", valor_referencia: "", data_admissao: "", observacoes: "" });
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.nome.trim()) {
+      setBanner({ type: "error", text: "Informe o nome do funcionário." });
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch(`/rest/v1/funcionarios`, {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({
+          nome: form.nome.trim(),
+          tipo: form.tipo,
+          funcao: form.funcao || null,
+          valor_referencia: form.valor_referencia !== "" ? Number(form.valor_referencia) : null,
+          data_admissao: form.data_admissao || null,
+          ativo: true,
+          observacoes: form.observacoes || null,
+        }),
+      });
+      setBanner({ type: "success", text: "Funcionário cadastrado." });
+      setForm({ nome: "", tipo: "diarista", funcao: "", valor_referencia: "", data_admissao: "", observacoes: "" });
+      setShowForm(false);
+      reload();
+    } catch (err) {
+      setBanner({ type: "error", text: "Erro ao salvar: " + err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const alternarAtivo = async (f) => {
+    try {
+      await apiFetch(`/rest/v1/funcionarios?id=eq.${f.id}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ ativo: !f.ativo }),
+      });
+      setBanner({ type: "success", text: f.ativo ? "Funcionário marcado como inativo." : "Funcionário reativado." });
+      reload();
+    } catch (err) {
+      setBanner({ type: "error", text: "Erro: " + err.message });
+    }
+  };
+
+  const excluir = async (f) => {
+    if (!window.confirm(`Excluir "${f.nome}"? O histórico de pagamentos dele será mantido.`)) return;
+    try {
+      await apiFetch(`/rest/v1/funcionarios?id=eq.${f.id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+      setBanner({ type: "success", text: "Funcionário excluído." });
+      reload();
+    } catch (err) {
+      setBanner({ type: "error", text: "Erro ao excluir: " + err.message });
+    }
+  };
+
+  const ativos = funcionarios.filter((f) => f.ativo !== false);
+  const inativos = funcionarios.filter((f) => f.ativo === false);
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <SectionTitle>Funcionários ({ativos.length} ativo(s))</SectionTitle>
+        <IconButton onClick={() => setShowForm((v) => !v)} active={showForm} />
+      </div>
+
+      {showForm && (
+        <form onSubmit={submit} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 14, padding: 18, marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+          <Field label="Nome" value={form.nome} onChange={(v) => setForm({ ...form, nome: v })} placeholder="Nome completo" required />
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>Tipo</span>
+            <select
+              value={form.tipo}
+              onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+              style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
+            >
+              {Object.entries(TIPO_FUNCIONARIO_LABELS).map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Field label="Função" value={form.funcao} onChange={(v) => setForm({ ...form, funcao: v })} placeholder="Ex: Ordenhador, Vaqueiro, Tratador" />
+          <Field
+            label="Valor de referência (R$) - salário ou diária"
+            type="number"
+            value={form.valor_referencia}
+            onChange={(v) => setForm({ ...form, valor_referencia: v })}
+            placeholder="0.00"
+          />
+          <Field label="Data de admissão" type="date" value={form.data_admissao} onChange={(v) => setForm({ ...form, data_admissao: v })} />
+          <Field label="Observações" value={form.observacoes} onChange={(v) => setForm({ ...form, observacoes: v })} />
+          <SaveButton saving={saving} />
+        </form>
+      )}
+
+      <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+        {ativos.length === 0 && <EmptyState text="Nenhum funcionário cadastrado ainda." />}
+        {ativos.map((f) => (
+          <div key={f.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{f.nome}</div>
+                <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 2 }}>
+                  {TIPO_FUNCIONARIO_LABELS[f.tipo] || f.tipo} {f.funcao ? `• ${f.funcao}` : ""}
+                  {f.valor_referencia != null ? ` • R$ ${Number(f.valor_referencia).toFixed(2)}` : ""}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button
+                onClick={() => alternarAtivo(f)}
+                style={{ flex: 1, background: "rgba(184,134,46,0.12)", border: "1px solid #B8862E", borderRadius: 8, padding: "8px 0", color: "#8C6A3F", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+              >
+                Marcar inativo
+              </button>
+              <button
+                onClick={() => excluir(f)}
+                style={{ background: "rgba(196,100,75,0.15)", border: "1px solid #B5453A", borderRadius: 8, padding: "8px 10px", color: "#A83B2E", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {inativos.length > 0 && (
+          <>
+            <div style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600, textTransform: "uppercase", marginTop: 12 }}>Inativos</div>
+            {inativos.map((f) => (
+              <div key={f.id} style={{ background: "#F5F2E9", borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "#6E7A61" }}>
+                <span>{f.nome}</span>
+                <button onClick={() => alternarAtivo(f)} style={{ background: "none", border: "none", color: "#5BAA47", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  Reativar
+                </button>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );
