@@ -725,6 +725,12 @@ function RebanhoApp() {
             documentos={documentos}
             fazendas={fazendas}
             financeiro={financeiro}
+            avesLotes={avesLotes}
+            avesProducao={avesProducao}
+            avesMortalidade={avesMortalidade}
+            avesRacao={avesRacao}
+            avesVendas={avesVendas}
+            compradores={compradores}
             apiFetch={apiFetch}
             uploadFoto={uploadFoto}
             uploadDocumento={uploadDocumento}
@@ -828,21 +834,6 @@ function RebanhoApp() {
             programas={programasMelhoramento}
             comunicados={comunicadosMelhoramento}
             animals={animals}
-            apiFetch={apiFetch}
-            reload={loadAll}
-            setBanner={setBanner}
-          />
-        )}
-        {tab === "aves" && (
-          <AvesTab
-            lotes={avesLotes}
-            producao={avesProducao}
-            mortalidade={avesMortalidade}
-            racao={avesRacao}
-            vendas={avesVendas}
-            fazendas={fazendas}
-            compradores={compradores}
-            profile={profile}
             apiFetch={apiFetch}
             reload={loadAll}
             setBanner={setBanner}
@@ -1366,9 +1357,6 @@ function BottomNav({ tab, setTab, profile, alertCount }) {
   if (acessos.includes("leite")) {
     items.push({ id: "producao", label: "Produção", icon: Droplet });
     items.push({ id: "entregas", label: "Entrega", icon: Truck });
-  }
-  if (acessos.includes("aves")) {
-    items.push({ id: "aves", label: "Aves", icon: Egg });
   }
   items.push({ id: "saude", label: "Saúde", icon: Stethoscope });
   items.push({ id: "manejo", label: "Manejo", icon: Grid });
@@ -2442,7 +2430,27 @@ function LoteBrincosModal({ animals, fazendas, apiFetch, reload, setBanner, onCl
   );
 }
 
-function AnimaisTab({ animals, production, healthRecords, pesagens, documentos, fazendas, financeiro, apiFetch, uploadFoto, uploadDocumento, reload, setBanner }) {
+function AnimaisTab({
+  animals,
+  production,
+  healthRecords,
+  pesagens,
+  documentos,
+  fazendas,
+  financeiro,
+  avesLotes,
+  avesProducao,
+  avesMortalidade,
+  avesRacao,
+  avesVendas,
+  compradores,
+  apiFetch,
+  uploadFoto,
+  uploadDocumento,
+  reload,
+  setBanner,
+  profile,
+}) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_ANIMAL_FORM);
@@ -2453,6 +2461,7 @@ function AnimaisTab({ animals, production, healthRecords, pesagens, documentos, 
   const [filtroFazenda, setFiltroFazenda] = useState("todas");
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [showLoteModal, setShowLoteModal] = useState(false);
+  const temAcessoAves = profile?.role === "administrador" || (profile?.acesso_rebanhos || []).includes("aves");
 
   const startAdd = () => {
     setEditingId(null);
@@ -3036,7 +3045,45 @@ function AnimaisTab({ animals, production, healthRecords, pesagens, documentos, 
             {f === "todos" ? `Todos (${animals.length})` : `${FINALIDADE_LABELS[f]} (${animals.filter((a) => (a.finalidade || "leite") === f).length})`}
           </button>
         ))}
+        {temAcessoAves && (
+          <button
+            onClick={() => setFiltroFinalidade("aves")}
+            style={{
+              flexShrink: 0,
+              padding: "7px 14px",
+              borderRadius: 20,
+              border: "1px solid " + (filtroFinalidade === "aves" ? "#8C6A3F" : "rgba(11,61,46,0.18)"),
+              background: filtroFinalidade === "aves" ? "#8C6A3F22" : "transparent",
+              color: filtroFinalidade === "aves" ? "#8C6A3F" : "#6E7A61",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Aves ({avesLotes.filter((l) => l.status !== "encerrado").length} lote{avesLotes.filter((l) => l.status !== "encerrado").length === 1 ? "" : "s"})
+          </button>
+        )}
       </div>
+
+      {filtroFinalidade === "aves" ? (
+        <div style={{ marginTop: 16 }}>
+          <AvesTab
+            lotes={avesLotes}
+            producao={avesProducao}
+            mortalidade={avesMortalidade}
+            racao={avesRacao}
+            vendas={avesVendas}
+            fazendas={fazendas}
+            compradores={compradores}
+            profile={profile}
+            apiFetch={apiFetch}
+            reload={reload}
+            setBanner={setBanner}
+          />
+        </div>
+      ) : (
+        <>
 
       {fazendas.length > 1 && (
         <div style={{ display: "flex", gap: 6, marginTop: 8, overflowX: "auto" }}>
@@ -3239,6 +3286,8 @@ function AnimaisTab({ animals, production, healthRecords, pesagens, documentos, 
           setBanner={setBanner}
           onClose={() => setChartAnimal(null)}
         />
+      )}
+        </>
       )}
     </div>
   );
