@@ -288,6 +288,8 @@ function RebanhoApp() {
   const [avesMortalidade, setAvesMortalidade] = useState([]);
   const [avesRacao, setAvesRacao] = useState([]);
   const [avesVendas, setAvesVendas] = useState([]);
+  const [insumos, setInsumos] = useState([]);
+  const [comprasInsumos, setComprasInsumos] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [banner, setBanner] = useState(null); // { type, text }
 
@@ -517,6 +519,14 @@ function RebanhoApp() {
       try {
         const av = await apiFetch(`/rest/v1/aves_vendas?select=*&order=data.desc&limit=500`);
         setAvesVendas(av || []);
+      } catch (e) {}
+      try {
+        const ins = await apiFetch(`/rest/v1/insumos?select=*&order=nome.asc`);
+        setInsumos(ins || []);
+      } catch (e) {}
+      try {
+        const ci = await apiFetch(`/rest/v1/insumos_compras?select=*&order=data.desc&limit=1000`);
+        setComprasInsumos(ci || []);
       } catch (e) {}
       try {
         const u = await apiFetch(`/rest/v1/profiles?select=*&order=nome.asc`);
@@ -792,6 +802,8 @@ function RebanhoApp() {
             financeiro={financeiro}
             entregas={entregas}
             production={production}
+            insumos={insumos}
+            comprasInsumos={comprasInsumos}
             apiFetch={apiFetch}
             reload={loadAll}
             setBanner={setBanner}
@@ -827,6 +839,9 @@ function RebanhoApp() {
             lotesConfinamento={lotesConfinamento}
             healthRecords={healthRecords}
             protocolos={protocolos}
+            avesVendas={avesVendas}
+            insumos={insumos}
+            comprasInsumos={comprasInsumos}
           />
         )}
         {tab === "melhoramento" && profile?.role === "administrador" && (
@@ -7204,7 +7219,22 @@ function IndicadoresGrupo({ titulo, children }) {
   );
 }
 
-function IndicadoresTab({ animals, production, financeiro, entregas, romaneios, romaneioAnimais, pesagens, tratosConfinamento, lotesConfinamento, healthRecords, protocolos }) {
+function IndicadoresTab({
+  animals,
+  production,
+  financeiro,
+  entregas,
+  romaneios,
+  romaneioAnimais,
+  pesagens,
+  tratosConfinamento,
+  lotesConfinamento,
+  healthRecords,
+  protocolos,
+  avesVendas,
+  insumos,
+  comprasInsumos,
+}) {
   const hoje = todayISO();
   const inicioMes = hoje.slice(0, 8) + "01";
   const inicioAno = hoje.slice(0, 4) + "-01-01";
@@ -7429,6 +7459,30 @@ function IndicadoresTab({ animals, production, financeiro, entregas, romaneios, 
         <IndicadorCard label="Ocorrências registradas" value={ocorrenciasPeriodo.length} />
         <IndicadorCard label="Vacinações aplicadas" value={vacinacoesPeriodo.length} />
       </IndicadoresGrupo>
+
+      {(() => {
+        const comprasPeriodoInsumos = (comprasInsumos || []).filter((c) => inRange(c.data));
+        const custoPorCategoria = { leite: 0, corte: 0, bezerro: 0, aves: 0, geral: 0 };
+        comprasPeriodoInsumos.forEach((c) => {
+          custoPorCategoria[c.categoria_animal || "geral"] = (custoPorCategoria[c.categoria_animal || "geral"] || 0) + Number(c.valor_total || 0);
+        });
+        const receitaAvesPeriodo = (avesVendas || []).filter((v) => inRange(v.data)).reduce((s, v) => s + Number(v.valor_total || 0), 0);
+        const lucroLeite = receitaLeite - custoPorCategoria.leite;
+        const lucroCorteLiquido = receitaVendaGado - custoAquisicaoVendidos - custoPorCategoria.corte;
+        const lucroAves = receitaAvesPeriodo - custoPorCategoria.aves;
+        return (
+          <IndicadoresGrupo titulo="Custo x lucro por categoria (insumos incluídos)">
+            <IndicadorCard label="Leite: custo de insumos" value={fmtR(custoPorCategoria.leite)} sub={`Receita: ${fmtR(receitaLeite)}`} />
+            <IndicadorCard label="Leite: lucro líquido" value={fmtR(lucroLeite)} color={lucroLeite >= 0 ? "#5BAA47" : "#B5453A"} />
+            <IndicadorCard label="Corte: custo de insumos" value={fmtR(custoPorCategoria.corte)} sub={`Receita: ${fmtR(receitaVendaGado)}`} />
+            <IndicadorCard label="Corte: lucro líquido" value={fmtR(lucroCorteLiquido)} sub="Receita − compra dos animais − insumos" color={lucroCorteLiquido >= 0 ? "#5BAA47" : "#B5453A"} />
+            <IndicadorCard label="Aves: custo de insumos" value={fmtR(custoPorCategoria.aves)} sub={`Receita: ${fmtR(receitaAvesPeriodo)}`} />
+            <IndicadorCard label="Aves: lucro líquido" value={fmtR(lucroAves)} color={lucroAves >= 0 ? "#5BAA47" : "#B5453A"} />
+            <IndicadorCard label="Bezerro(a): custo de insumos" value={fmtR(custoPorCategoria.bezerro)} sub="Sem venda direta (some ao virar corte)" />
+            <IndicadorCard label="Custos gerais (não alocados)" value={fmtR(custoPorCategoria.geral)} sub="Insumos sem categoria específica" />
+          </IndicadoresGrupo>
+        );
+      })()}
     </div>
   );
 }
@@ -8818,7 +8872,312 @@ function FazendasTab({ fazendas, animals, apiFetch, reload, setBanner }) {
   );
 }
 
-function FinanceiroTab({ financeiro, entregas, production, apiFetch, reload, setBanner }) {
+const CATEGORIA_INSUMO_LABELS = { racao: "Ração", medicamento: "Medicamento", mineral: "Mineral/Suplemento", combustivel: "Combustível", manutencao: "Manutenção", outro: "Outro" };
+const CATEGORIA_ANIMAL_LABELS = { leite: "Leite", corte: "Corte", bezerro: "Bezerro(a)", aves: "Aves", geral: "Geral (fazenda toda)" };
+const CATEGORIA_ANIMAL_COLORS = { leite: "#B8862E", corte: "#B5453A", bezerro: "#3E7C99", aves: "#8C6A3F", geral: "#6E7A61" };
+
+function FinanceiroTab({ financeiro, entregas, production, insumos, comprasInsumos, apiFetch, reload, setBanner }) {
+  const [subTab, setSubTab] = useState("ciclos");
+
+  const btnStyle = (active) => ({
+    flex: 1,
+    background: active ? "#D8B44E" : "#FFFFFF",
+    color: active ? "#16241C" : "#1F3324",
+    border: "1px solid rgba(11,61,46,0.14)",
+    borderRadius: 8,
+    padding: "10px 0",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  });
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+        <button onClick={() => setSubTab("ciclos")} style={btnStyle(subTab === "ciclos")}>
+          Ciclos de leite
+        </button>
+        <button onClick={() => setSubTab("insumos")} style={btnStyle(subTab === "insumos")}>
+          Insumos
+        </button>
+      </div>
+
+      {subTab === "ciclos" && <CicloLeiteSecao financeiro={financeiro} entregas={entregas} production={production} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
+      {subTab === "insumos" && <InsumosSecao insumos={insumos} compras={comprasInsumos} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
+    </div>
+  );
+}
+
+function InsumosSecao({ insumos, compras, apiFetch, reload, setBanner }) {
+  const [secao, setSecao] = useState("compras");
+
+  const pillStyle = (active) => ({
+    background: active ? "#8C6A3F" : "#FFFFFF",
+    color: active ? "#FFFFFF" : "#6E7A61",
+    border: "1px solid " + (active ? "#8C6A3F" : "rgba(11,61,46,0.14)"),
+    borderRadius: 20,
+    padding: "6px 14px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  });
+
+  const hoje = todayISO();
+  const mesAtual = hoje.slice(0, 7);
+  const comprasMes = compras.filter((c) => c.data.slice(0, 7) === mesAtual);
+  const totalPorCategoria = { leite: 0, corte: 0, bezerro: 0, aves: 0, geral: 0 };
+  comprasMes.forEach((c) => {
+    totalPorCategoria[c.categoria_animal || "geral"] = (totalPorCategoria[c.categoria_animal || "geral"] || 0) + Number(c.valor_total || 0);
+  });
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <button onClick={() => setSecao("compras")} style={pillStyle(secao === "compras")}>
+          Compras
+        </button>
+        <button onClick={() => setSecao("catalogo")} style={pillStyle(secao === "catalogo")}>
+          Catálogo
+        </button>
+      </div>
+
+      {secao === "compras" && (
+        <>
+          <div style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: "#6E7A61", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Custo de insumos este mês, por categoria</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {Object.entries(CATEGORIA_ANIMAL_LABELS).map(([k, label]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: CATEGORIA_ANIMAL_COLORS[k] }}>{label}</span>
+                  <span style={{ fontWeight: 600 }}>R$ {totalPorCategoria[k].toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <ComprasInsumoForm insumos={insumos} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
+          <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+            {compras.length === 0 && <EmptyState text="Nenhuma compra de insumo registrada ainda." />}
+            {compras.map((c) => {
+              const insumo = insumos.find((i) => i.id === c.insumo_id);
+              return (
+                <div key={c.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{insumo ? insumo.nome : "Insumo removido"}</div>
+                      <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 2 }}>
+                        {formatDataBR(c.data)} • {c.quantidade} {insumo?.unidade || ""} {c.fornecedor ? `• ${c.fornecedor}` : ""}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: 700 }}>R$ {Number(c.valor_total).toFixed(2)}</div>
+                      <Badge color={CATEGORIA_ANIMAL_COLORS[c.categoria_animal || "geral"]}>{CATEGORIA_ANIMAL_LABELS[c.categoria_animal || "geral"]}</Badge>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {secao === "catalogo" && <CatalogoInsumosSecao insumos={insumos} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
+    </div>
+  );
+}
+
+function ComprasInsumoForm({ insumos, apiFetch, reload, setBanner }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ insumo_id: "", data: todayISO(), quantidade: "", valor_unitario: "", fornecedor: "", categoria_animal: "geral", observacoes: "" });
+  const [saving, setSaving] = useState(false);
+
+  const valorTotal = (Number(form.quantidade) || 0) * (Number(form.valor_unitario) || 0);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.insumo_id) {
+      setBanner({ type: "error", text: "Selecione o insumo." });
+      return;
+    }
+    if (!form.quantidade || !form.valor_unitario) {
+      setBanner({ type: "error", text: "Informe quantidade e valor unitário." });
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch(`/rest/v1/insumos_compras`, {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({
+          insumo_id: form.insumo_id,
+          data: form.data,
+          quantidade: Number(form.quantidade),
+          valor_unitario: Number(form.valor_unitario),
+          fornecedor: form.fornecedor || null,
+          categoria_animal: form.categoria_animal,
+          observacoes: form.observacoes || null,
+        }),
+      });
+      setBanner({ type: "success", text: "Compra registrada." });
+      setForm({ insumo_id: "", data: todayISO(), quantidade: "", valor_unitario: "", fornecedor: "", categoria_animal: "geral", observacoes: "" });
+      setShowForm(false);
+      reload();
+    } catch (err) {
+      setBanner({ type: "error", text: "Erro ao salvar: " + err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <SectionTitle>Compras de insumos</SectionTitle>
+        <IconButton onClick={() => setShowForm((v) => !v)} active={showForm} />
+      </div>
+
+      {showForm && (
+        <form onSubmit={submit} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 14, padding: 18, marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>Insumo</span>
+            <select
+              value={form.insumo_id}
+              onChange={(e) => setForm({ ...form, insumo_id: e.target.value })}
+              style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
+            >
+              <option value="">Selecione...</option>
+              {insumos.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+          {insumos.length === 0 && <div style={{ fontSize: 12, color: "#B8862E" }}>Cadastre um insumo no "Catálogo" primeiro.</div>}
+
+          <Field label="Data" type="date" value={form.data} onChange={(v) => setForm({ ...form, data: v })} required />
+          <Field label="Quantidade" type="number" value={form.quantidade} onChange={(v) => setForm({ ...form, quantidade: v })} placeholder="0" required />
+          <Field label="Valor unitário (R$)" type="number" value={form.valor_unitario} onChange={(v) => setForm({ ...form, valor_unitario: v })} placeholder="0.00" required />
+          <div style={{ fontSize: 13, color: "#8C6A3F", fontWeight: 700 }}>Valor total: R$ {valorTotal.toFixed(2)}</div>
+          <Field label="Fornecedor (opcional)" value={form.fornecedor} onChange={(v) => setForm({ ...form, fornecedor: v })} />
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>Alocar custo para</span>
+            <select
+              value={form.categoria_animal}
+              onChange={(e) => setForm({ ...form, categoria_animal: e.target.value })}
+              style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
+            >
+              {Object.entries(CATEGORIA_ANIMAL_LABELS).map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div style={{ fontSize: 11, color: "#6E7A61" }}>
+            Escolha a espécie/categoria que esse gasto pertence, pra aparecer certo no comparativo de custo x lucro nos Indicadores. Use "Geral" para gastos que não são de um rebanho específico.
+          </div>
+
+          <Field label="Observações" value={form.observacoes} onChange={(v) => setForm({ ...form, observacoes: v })} />
+          <SaveButton saving={saving} />
+        </form>
+      )}
+    </div>
+  );
+}
+
+function CatalogoInsumosSecao({ insumos, apiFetch, reload, setBanner }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ nome: "", categoria: "racao", unidade: "", observacoes: "" });
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.nome.trim()) {
+      setBanner({ type: "error", text: "Informe o nome do insumo." });
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch(`/rest/v1/insumos`, {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ nome: form.nome.trim(), categoria: form.categoria, unidade: form.unidade || null, observacoes: form.observacoes || null }),
+      });
+      setBanner({ type: "success", text: "Insumo cadastrado." });
+      setForm({ nome: "", categoria: "racao", unidade: "", observacoes: "" });
+      setShowForm(false);
+      reload();
+    } catch (err) {
+      setBanner({ type: "error", text: "Erro ao salvar: " + err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const excluir = async (i) => {
+    if (!window.confirm(`Excluir o insumo "${i.nome}"?`)) return;
+    try {
+      await apiFetch(`/rest/v1/insumos?id=eq.${i.id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+      setBanner({ type: "success", text: "Insumo excluído." });
+      reload();
+    } catch (err) {
+      setBanner({ type: "error", text: "Erro ao excluir: " + err.message });
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <SectionTitle>Catálogo de insumos ({insumos.length})</SectionTitle>
+        <IconButton onClick={() => setShowForm((v) => !v)} active={showForm} />
+      </div>
+
+      {showForm && (
+        <form onSubmit={submit} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 14, padding: 18, marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+          <Field label="Nome do insumo" value={form.nome} onChange={(v) => setForm({ ...form, nome: v })} placeholder="Ex: Ração inicial, Vermífugo, Diesel" required />
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>Categoria</span>
+            <select
+              value={form.categoria}
+              onChange={(e) => setForm({ ...form, categoria: e.target.value })}
+              style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
+            >
+              {Object.entries(CATEGORIA_INSUMO_LABELS).map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Field label="Unidade de medida" value={form.unidade} onChange={(v) => setForm({ ...form, unidade: v })} placeholder="Ex: kg, saco, L, un" />
+          <Field label="Observações" value={form.observacoes} onChange={(v) => setForm({ ...form, observacoes: v })} />
+          <SaveButton saving={saving} />
+        </form>
+      )}
+
+      <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+        {insumos.length === 0 && <EmptyState text="Nenhum insumo cadastrado ainda." />}
+        {insumos.map((i) => (
+          <div key={i.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{i.nome}</div>
+              <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 2 }}>
+                {CATEGORIA_INSUMO_LABELS[i.categoria] || i.categoria} {i.unidade ? `• ${i.unidade}` : ""}
+              </div>
+            </div>
+            <button onClick={() => excluir(i)} style={{ background: "rgba(196,100,75,0.15)", border: "1px solid #B5453A", borderRadius: 8, padding: "6px 10px", color: "#A83B2E", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              Excluir
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CicloLeiteSecao({ financeiro, entregas, production, apiFetch, reload, setBanner }) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ ...EMPTY_FINANCEIRO_FORM, data: todayISO(), data_fim: todayISO() });
