@@ -763,6 +763,9 @@ function RebanhoApp() {
           <ProducaoTab
             animals={animals}
             production={production}
+            avesLotes={avesLotes}
+            avesProducao={avesProducao}
+            profile={profile}
             apiFetch={apiFetch}
             reload={loadAll}
             setBanner={setBanner}
@@ -796,7 +799,16 @@ function RebanhoApp() {
           />
         )}
         {tab === "entregas" && (
-          <EntregasTab entregas={entregas} profile={profile} apiFetch={apiFetch} reload={loadAll} setBanner={setBanner} />
+          <EntregasTab
+            entregas={entregas}
+            avesLotes={avesLotes}
+            avesVendas={avesVendas}
+            compradores={compradores}
+            profile={profile}
+            apiFetch={apiFetch}
+            reload={loadAll}
+            setBanner={setBanner}
+          />
         )}
         {tab === "usuarios" && profile?.role === "administrador" && (
           <UsuariosTab
@@ -1382,7 +1394,7 @@ function TopBar({ profile, onLogout, onSettings }) {
 function BottomNav({ tab, setTab, profile, alertCount }) {
   const acessos = profile?.role === "administrador" ? ["leite", "corte", "bezerro", "aves"] : profile?.acesso_rebanhos || [];
   const items = [{ id: "overview", label: "Visão geral", icon: Home }, { id: "animais", label: "Animais", icon: List }];
-  if (acessos.includes("leite")) {
+  if (acessos.includes("leite") || acessos.includes("aves")) {
     items.push({ id: "producao", label: "Produção", icon: Droplet });
     items.push({ id: "entregas", label: "Entrega", icon: Truck });
   }
@@ -3101,10 +3113,7 @@ function AnimaisTab({
             producao={avesProducao}
             mortalidade={avesMortalidade}
             racao={avesRacao}
-            vendas={avesVendas}
             fazendas={fazendas}
-            compradores={compradores}
-            profile={profile}
             apiFetch={apiFetch}
             reload={reload}
             setBanner={setBanner}
@@ -4218,7 +4227,48 @@ function LineChartCanvasOnly({ labels, valores, color }) {
 
   return <canvas ref={canvasRef}></canvas>;
 }
-function ProducaoTab({ animals, production, apiFetch, reload, setBanner }) {
+function ProducaoTab({ animals, production, avesLotes, avesProducao, profile, apiFetch, reload, setBanner }) {
+  const isAdmin = profile?.role === "administrador";
+  const acessos = isAdmin ? ["leite", "corte", "bezerro", "aves"] : profile?.acesso_rebanhos || [];
+  const temLeite = isAdmin || acessos.includes("leite");
+  const temAves = isAdmin || acessos.includes("aves");
+  const [subTab, setSubTab] = useState(temLeite ? "leite" : "ovos");
+
+  const btnStyle = (active) => ({
+    flex: 1,
+    background: active ? "#D8B44E" : "#FFFFFF",
+    color: active ? "#16241C" : "#1F3324",
+    border: "1px solid rgba(11,61,46,0.14)",
+    borderRadius: 8,
+    padding: "10px 0",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  });
+
+  if (temLeite && temAves) {
+    return (
+      <div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+          <button onClick={() => setSubTab("leite")} style={btnStyle(subTab === "leite")}>
+            Leite
+          </button>
+          <button onClick={() => setSubTab("ovos")} style={btnStyle(subTab === "ovos")}>
+            Ovos
+          </button>
+        </div>
+        {subTab === "leite" && <ProducaoLeiteSecao animals={animals} production={production} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
+        {subTab === "ovos" && <AvesPosturaSecao lotes={avesLotes} producao={avesProducao} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
+      </div>
+    );
+  }
+  if (temAves) {
+    return <AvesPosturaSecao lotes={avesLotes} producao={avesProducao} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />;
+  }
+  return <ProducaoLeiteSecao animals={animals} production={production} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />;
+}
+
+function ProducaoLeiteSecao({ animals, production, apiFetch, reload, setBanner }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ animal_id: "", data: todayISO(), periodo: "manha", litros: "" });
   const [saving, setSaving] = useState(false);
@@ -6082,7 +6132,48 @@ function UsuarioRow({ user, isSelf, saving, roleLabel, roleColor, onSetRole, onS
 }
 
 // ---------------- ENTREGAS DE LEITE (todos os usuários) ----------------
-function EntregasTab({ entregas, profile, apiFetch, reload, setBanner }) {
+function EntregasTab({ entregas, avesLotes, avesVendas, compradores, profile, apiFetch, reload, setBanner }) {
+  const isAdmin = profile?.role === "administrador";
+  const acessos = isAdmin ? ["leite", "corte", "bezerro", "aves"] : profile?.acesso_rebanhos || [];
+  const temLeite = isAdmin || acessos.includes("leite");
+  const temAvesVendas = isAdmin;
+  const [subTab, setSubTab] = useState(temLeite ? "leite" : "ovos");
+
+  const btnStyle = (active) => ({
+    flex: 1,
+    background: active ? "#D8B44E" : "#FFFFFF",
+    color: active ? "#16241C" : "#1F3324",
+    border: "1px solid rgba(11,61,46,0.14)",
+    borderRadius: 8,
+    padding: "10px 0",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  });
+
+  if (temLeite && temAvesVendas) {
+    return (
+      <div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+          <button onClick={() => setSubTab("leite")} style={btnStyle(subTab === "leite")}>
+            Leite
+          </button>
+          <button onClick={() => setSubTab("ovos")} style={btnStyle(subTab === "ovos")}>
+            Ovos
+          </button>
+        </div>
+        {subTab === "leite" && <EntregaLeiteSecao entregas={entregas} profile={profile} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
+        {subTab === "ovos" && <AvesVendasSecao lotes={avesLotes} vendas={avesVendas} compradores={compradores} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
+      </div>
+    );
+  }
+  if (temAvesVendas) {
+    return <AvesVendasSecao lotes={avesLotes} vendas={avesVendas} compradores={compradores} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />;
+  }
+  return <EntregaLeiteSecao entregas={entregas} profile={profile} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />;
+}
+
+function EntregaLeiteSecao({ entregas, profile, apiFetch, reload, setBanner }) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ data: todayISO(), litros_entregues: "", observacoes: "" });
@@ -8059,8 +8150,7 @@ function ComunicadosMelhoramentoSecao({ programas, comunicados, animals, apiFetc
 }
 
 // ---------------- AVES (POSTURA / OVOS) ----------------
-function AvesTab({ lotes, producao, mortalidade, racao, vendas, fazendas, compradores, profile, apiFetch, reload, setBanner }) {
-  const isAdmin = profile?.role === "administrador";
+function AvesTab({ lotes, producao, mortalidade, racao, fazendas, apiFetch, reload, setBanner }) {
   const [secao, setSecao] = useState("lotes");
 
   const pillStyle = (active) => ({
@@ -8077,14 +8167,15 @@ function AvesTab({ lotes, producao, mortalidade, racao, vendas, fazendas, compra
 
   const secoes = [
     ["lotes", "Lotes"],
-    ["postura", "Postura"],
     ["mortalidade", "Mortalidade"],
     ["racao", "Ração"],
   ];
-  if (isAdmin) secoes.push(["vendas", "Vendas"]);
 
   return (
     <div>
+      <div style={{ fontSize: 12, color: "#6E7A61", marginBottom: 12 }}>
+        A postura (ovos coletados) agora fica em Produção, e as vendas de ovos em Entrega.
+      </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto" }}>
         {secoes.map(([id, label]) => (
           <button key={id} onClick={() => setSecao(id)} style={pillStyle(secao === id)}>
@@ -8094,10 +8185,8 @@ function AvesTab({ lotes, producao, mortalidade, racao, vendas, fazendas, compra
       </div>
 
       {secao === "lotes" && <AvesLotesSecao lotes={lotes} producao={producao} mortalidade={mortalidade} fazendas={fazendas} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
-      {secao === "postura" && <AvesPosturaSecao lotes={lotes} producao={producao} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
       {secao === "mortalidade" && <AvesMortalidadeSecao lotes={lotes} mortalidade={mortalidade} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
       {secao === "racao" && <AvesRacaoSecao lotes={lotes} racao={racao} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
-      {secao === "vendas" && isAdmin && <AvesVendasSecao lotes={lotes} vendas={vendas} compradores={compradores} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
     </div>
   );
 }
