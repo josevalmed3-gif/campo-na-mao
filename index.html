@@ -6508,13 +6508,14 @@ function MiniMapPicker({ latitude, longitude, onChange }) {
 }
 
 // ---------------- CRM DE COMPRADORES ----------------
-const TIPO_COMPRADOR_LABELS = { leite: "Leite", gado: "Gado", ambos: "Leite e Gado", outro: "Outro" };
+const CATEGORIA_COMPRADOR_LABELS = { leite: "Leite", corte: "Corte", bezerro: "Bezerros", aves: "Aves/Ovos", outro: "Outro" };
+const CATEGORIA_COMPRADOR_COLORS = { leite: "#B8862E", corte: "#B5453A", bezerro: "#3E7C99", aves: "#8C6A3F", outro: "#6E7A61" };
 const TIPO_INTERACAO_LABELS = { ligacao: "Ligação", visita: "Visita", whatsapp: "WhatsApp", negociacao: "Negociação", venda: "Venda", outro: "Outro" };
 
 function CompradoresTab({ compradores, interacoes, apiFetch, reload, setBanner }) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ nome: "", tipo: "outro", telefone: "", whatsapp: "", email: "", endereco: "", observacoes: "" });
+  const [form, setForm] = useState({ nome: "", categorias: ["outro"], telefone: "", whatsapp: "", email: "", endereco: "", observacoes: "" });
   const [saving, setSaving] = useState(false);
   const [compradorAberto, setCompradorAberto] = useState(null);
 
@@ -6522,7 +6523,7 @@ function CompradoresTab({ compradores, interacoes, apiFetch, reload, setBanner }
 
   const startAdd = () => {
     setEditingId(null);
-    setForm({ nome: "", tipo: "outro", telefone: "", whatsapp: "", email: "", endereco: "", observacoes: "" });
+    setForm({ nome: "", categorias: ["outro"], telefone: "", whatsapp: "", email: "", endereco: "", observacoes: "" });
     setShowForm((v) => !v);
   };
 
@@ -6530,7 +6531,7 @@ function CompradoresTab({ compradores, interacoes, apiFetch, reload, setBanner }
     setEditingId(c.id);
     setForm({
       nome: c.nome,
-      tipo: c.tipo || "outro",
+      categorias: c.categorias && c.categorias.length > 0 ? c.categorias : ["outro"],
       telefone: c.telefone || "",
       whatsapp: c.whatsapp || "",
       email: c.email || "",
@@ -6540,6 +6541,13 @@ function CompradoresTab({ compradores, interacoes, apiFetch, reload, setBanner }
     setShowForm(true);
   };
 
+  const toggleCategoria = (k) => {
+    setForm((f) => {
+      const atual = f.categorias.includes(k) ? f.categorias.filter((x) => x !== k) : [...f.categorias, k];
+      return { ...f, categorias: atual.length > 0 ? atual : ["outro"] };
+    });
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     if (!form.nome) return;
@@ -6547,7 +6555,7 @@ function CompradoresTab({ compradores, interacoes, apiFetch, reload, setBanner }
     try {
       const payload = {
         nome: form.nome,
-        tipo: form.tipo,
+        categorias: form.categorias,
         telefone: form.telefone || null,
         whatsapp: form.whatsapp || null,
         email: form.email || null,
@@ -6594,18 +6602,31 @@ function CompradoresTab({ compradores, interacoes, apiFetch, reload, setBanner }
           <div style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600, textTransform: "uppercase" }}>{editingId ? "Editando comprador" : "Novo comprador"}</div>
           <Field label="Nome (empresa ou pessoa)" value={form.nome} onChange={(v) => setForm({ ...form, nome: v })} placeholder="Ex: Laticínios Bahia" required />
           <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>Tipo</span>
-            <select
-              value={form.tipo}
-              onChange={(e) => setForm({ ...form, tipo: e.target.value })}
-              style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
-            >
-              {Object.entries(TIPO_COMPRADOR_LABELS).map(([k, label]) => (
-                <option key={k} value={k}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>O que ele compra (marque um ou mais)</span>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {Object.entries(CATEGORIA_COMPRADOR_LABELS).map(([k, label]) => {
+                const marcado = form.categorias.includes(k);
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => toggleCategoria(k)}
+                    style={{
+                      padding: "7px 12px",
+                      borderRadius: 20,
+                      border: "1px solid " + (marcado ? CATEGORIA_COMPRADOR_COLORS[k] : "rgba(11,61,46,0.18)"),
+                      background: marcado ? CATEGORIA_COMPRADOR_COLORS[k] + "22" : "transparent",
+                      color: marcado ? CATEGORIA_COMPRADOR_COLORS[k] : "#6E7A61",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </label>
           <Field label="Telefone" value={form.telefone} onChange={(v) => setForm({ ...form, telefone: v })} placeholder="(00) 00000-0000" />
           <Field label="WhatsApp" value={form.whatsapp} onChange={(v) => setForm({ ...form, whatsapp: v })} placeholder="(00) 00000-0000" />
@@ -6623,17 +6644,25 @@ function CompradoresTab({ compradores, interacoes, apiFetch, reload, setBanner }
           const ultima = historico[0];
           const atrasado = ultima && ultima.proximo_contato && ultima.proximo_contato < hoje;
           const aberto = compradorAberto === c.id;
+          const categorias = c.categorias && c.categorias.length > 0 ? c.categorias : ["outro"];
           return (
             <div key={c.id} style={{ background: "#FFFFFF", border: `1px solid ${atrasado ? "#B5453A" : "rgba(11,61,46,0.12)"}`, borderRadius: 12, padding: "12px 16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>{c.nome}</div>
                   <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 2 }}>
                     {c.telefone || c.whatsapp || "Sem contato cadastrado"}
                   </div>
                 </div>
-                <Badge color={c.tipo === "leite" ? "#B8862E" : c.tipo === "gado" ? "#B5453A" : "#3E7C99"}>{TIPO_COMPRADOR_LABELS[c.tipo]}</Badge>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end", maxWidth: 160 }}>
+                  {categorias.map((cat) => (
+                    <Badge key={cat} color={CATEGORIA_COMPRADOR_COLORS[cat] || "#6E7A61"}>
+                      {CATEGORIA_COMPRADOR_LABELS[cat] || cat}
+                    </Badge>
+                  ))}
+                </div>
               </div>
+
 
               {atrasado && (
                 <div style={{ marginTop: 8, fontSize: 11, color: "#A83B2E", fontWeight: 700 }}>
@@ -6757,6 +6786,8 @@ function HistoricoComprador({ comprador, historico, apiFetch, reload, setBanner 
 }
 
 function RomaneioTab({ romaneios, romaneioAnimais, animals, compradores, apiFetch, reload, setBanner }) {
+  const compradoresCorte = compradores.filter((c) => (c.categorias || []).includes("corte"));
+  const compradoresParaSelecao = compradoresCorte.length > 0 ? compradoresCorte : compradores;
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     data: todayISO(),
@@ -7050,7 +7081,7 @@ function RomaneioTab({ romaneios, romaneioAnimais, animals, compradores, apiFetc
               style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
             >
               <option value="">Selecione...</option>
-              {compradores.map((c) => (
+              {compradoresParaSelecao.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nome}
                 </option>
@@ -8490,6 +8521,8 @@ function AvesRacaoSecao({ lotes, racao, apiFetch, reload, setBanner }) {
 }
 
 function AvesVendasSecao({ lotes, vendas, compradores, apiFetch, reload, setBanner }) {
+  const compradoresAves = compradores.filter((c) => (c.categorias || []).includes("aves"));
+  const compradoresParaSelecao = compradoresAves.length > 0 ? compradoresAves : compradores;
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ data: todayISO(), lote_id: "", comprador_id: "", quantidade_duzias: "", preco_duzia: "", observacoes: "" });
   const [saving, setSaving] = useState(false);
@@ -8578,7 +8611,7 @@ function AvesVendasSecao({ lotes, vendas, compradores, apiFetch, reload, setBann
               style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
             >
               <option value="">Não especificar</option>
-              {compradores.map((c) => (
+              {compradoresParaSelecao.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nome}
                 </option>
