@@ -5833,6 +5833,26 @@ function UsuariosTab({ users, currentUserId, apiFetch, reload, setBanner }) {
     }
   };
 
+  const excluirPermanente = async (user) => {
+    const confirmar = window.confirm(
+      `Excluir PERMANENTEMENTE o perfil de ${user.nome}? Essa ação não pode ser desfeita — não vai dar pra restaurar depois.`
+    );
+    if (!confirmar) return;
+    setSavingId(user.id);
+    try {
+      await apiFetch(`/rest/v1/profiles?id=eq.${user.id}`, {
+        method: "DELETE",
+        headers: { Prefer: "return=minimal" },
+      });
+      setBanner({ type: "success", text: `${user.nome} excluído permanentemente.` });
+      reload();
+    } catch (e) {
+      setBanner({ type: "error", text: "Erro ao excluir: " + e.message });
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const setNome = async (user, novoNome) => {
     if (!novoNome || novoNome === user.nome) return;
     setSavingId(user.id);
@@ -5996,22 +6016,41 @@ function UsuariosTab({ users, currentUserId, apiFetch, reload, setBanner }) {
                 }}
               >
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{u.nome}</div>
-                <button
-                  onClick={() => setAtivo(u, true)}
-                  disabled={savingId === u.id}
-                  style={{
-                    background: "rgba(124,154,92,0.15)",
-                    border: "1px solid #5BAA47",
-                    borderRadius: 8,
-                    padding: "8px 12px",
-                    color: "#6FA050",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: savingId === u.id ? "default" : "pointer",
-                  }}
-                >
-                  Restaurar
-                </button>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    onClick={() => setAtivo(u, true)}
+                    disabled={savingId === u.id}
+                    style={{
+                      background: "rgba(124,154,92,0.15)",
+                      border: "1px solid #5BAA47",
+                      borderRadius: 8,
+                      padding: "8px 12px",
+                      color: "#6FA050",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: savingId === u.id ? "default" : "pointer",
+                    }}
+                  >
+                    Restaurar
+                  </button>
+                  <button
+                    onClick={() => excluirPermanente(u)}
+                    disabled={savingId === u.id}
+                    title="Remove o perfil definitivamente"
+                    style={{
+                      background: "rgba(196,100,75,0.15)",
+                      border: "1px solid #B5453A",
+                      borderRadius: 8,
+                      padding: "8px 12px",
+                      color: "#A83B2E",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: savingId === u.id ? "default" : "pointer",
+                    }}
+                  >
+                    Excluir de vez
+                  </button>
+                </div>
               </div>
             ))}
           </div>
