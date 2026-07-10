@@ -105,6 +105,15 @@ function BarChart({ size, className, style }) {
     </svg>
   );
 }
+function Menu({ size, className, style }) {
+  return (
+    <svg {...iconProps(size)} className={className} style={style}>
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
 function Dna({ size, className, style }) {
   return (
     <svg {...iconProps(size)} className={className} style={style}>
@@ -276,6 +285,7 @@ function RebanhoApp() {
 
   const [tab, setTab] = useState("overview");
   const [showSettings, setShowSettings] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [animals, setAnimals] = useState([]);
   const [production, setProduction] = useState([]);
   const [healthRecords, setHealthRecords] = useState([]);
@@ -726,7 +736,7 @@ function RebanhoApp() {
     <ReadOnlyContext.Provider value={profile?.role === "visualizador"}>
     <div style={{ background: "#F5F2E9", minHeight: "100vh", fontFamily: "'Inter', sans-serif", color: "#1F3324" }}>
       <style>{FONTS}</style>
-      <TopBar profile={profile} onLogout={logout} onSettings={() => setShowSettings(true)} />
+      <TopBar profile={profile} onLogout={logout} onSettings={() => setShowSettings(true)} onMenu={() => setShowMenu(true)} />
       {showSettings && (
         <SettingsModal
           apiFetch={apiFetch}
@@ -749,7 +759,7 @@ function RebanhoApp() {
           </button>
         </div>
       )}
-      <div style={{ maxWidth: 768, margin: "0 auto", paddingBottom: 110, paddingLeft: 16, paddingRight: 16, paddingTop: 20 }}>
+      <div style={{ maxWidth: 768, margin: "0 auto", paddingBottom: 32, paddingLeft: 16, paddingRight: 16, paddingTop: 20 }}>
         {tab === "overview" && (
           <Overview
             animals={animals}
@@ -924,7 +934,15 @@ function RebanhoApp() {
           />
         )}
       </div>
-      <BottomNav tab={tab} setTab={setTab} profile={profile} alertCount={computeAlerts(animals, production, documentos, healthRecords, protocolos, piquetes, ocupacoes, interacoes, compradores).filter((a) => a.level === "urgente").length} />
+      <SideDrawer
+        open={showMenu}
+        onClose={() => setShowMenu(false)}
+        tab={tab}
+        setTab={setTab}
+        profile={profile}
+        onLogout={logout}
+        alertCount={computeAlerts(animals, production, documentos, healthRecords, protocolos, piquetes, ocupacoes, interacoes, compradores).filter((a) => a.level === "urgente").length}
+      />
     </div>
     </ReadOnlyContext.Provider>
   );
@@ -1373,7 +1391,7 @@ function Field({ label, value, onChange, type = "text", placeholder, required })
 }
 
 // ---------------- TOP BAR ----------------
-function TopBar({ profile, onLogout, onSettings }) {
+function TopBar({ profile, onLogout, onSettings, onMenu }) {
   return (
     <div
       style={{
@@ -1384,16 +1402,33 @@ function TopBar({ profile, onLogout, onSettings }) {
         justifyContent: "space-between",
       }}
     >
-      <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          background: "#FFFFFF",
-          borderRadius: 10,
-          padding: "5px 10px",
-        }}
-      >
-        <img src={CAMPO_LOGO_COLOR} alt="Campo na Mão" style={{ height: "26px", verticalAlign: "middle", display: "inline-block" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button
+          onClick={onMenu}
+          style={{
+            background: "rgba(11,61,46,0.10)",
+            border: "none",
+            borderRadius: 8,
+            padding: 8,
+            cursor: "pointer",
+            color: "#1F3324",
+            display: "flex",
+          }}
+          aria-label="Abrir menu"
+        >
+          <Menu size={18} />
+        </button>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            background: "#FFFFFF",
+            borderRadius: 10,
+            padding: "5px 10px",
+          }}
+        >
+          <img src={CAMPO_LOGO_COLOR} alt="Campo na Mão" style={{ height: "26px", verticalAlign: "middle", display: "inline-block" }} />
+        </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         {profile && (
@@ -1435,8 +1470,8 @@ function TopBar({ profile, onLogout, onSettings }) {
   );
 }
 
-// ---------------- BOTTOM NAV ----------------
-function BottomNav({ tab, setTab, profile, alertCount }) {
+// ---------------- MENU LATERAL ----------------
+function SideDrawer({ open, onClose, tab, setTab, profile, onLogout, alertCount }) {
   const acessos = profile?.role === "administrador" ? ["leite", "corte", "bezerro", "aves"] : profile?.acesso_rebanhos || [];
   const items = [{ id: "overview", label: "Visão geral", icon: Home }, { id: "animais", label: "Animais", icon: List }];
   if (acessos.includes("leite") || acessos.includes("aves")) {
@@ -1455,59 +1490,122 @@ function BottomNav({ tab, setTab, profile, alertCount }) {
     items.push({ id: "melhoramento", label: "Melhoramento", icon: Dna });
     items.push({ id: "usuarios", label: "Usuários", icon: Users });
   }
+
   return (
-    <div
-      style={{
-        position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        background: "#FFFFFF",
-        borderTop: "1px solid rgba(11,61,46,0.12)",
-        display: "flex",
-        justifyContent: items.length > 4 ? "flex-start" : "space-around",
-        overflowX: "auto",
-        padding: "8px 4px",
-      }}
-    >
-      {items.map(({ id, label, icon: Icon }) => (
-        <button
-          key={id}
-          onClick={() => setTab(id)}
-          style={{
-            position: "relative",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 4,
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            color: tab === id ? "#B8862E" : "#6E7A61",
-            padding: "4px 12px",
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ position: "relative" }}>
-            <Icon size={20} />
-            {id === "overview" && alertCount > 0 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: -3,
-                  right: -6,
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: "#B5453A",
-                }}
-              />
-            )}
-          </span>
-          <span style={{ fontSize: 10, fontWeight: 600 }}>{label}</span>
-        </button>
-      ))}
-    </div>
+    <>
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(11,61,46,0.35)",
+          zIndex: 998,
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? "auto" : "none",
+          transition: "opacity 0.2s ease",
+        }}
+      />
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          bottom: 0,
+          left: 0,
+          width: 260,
+          maxWidth: "80vw",
+          background: "#FFFFFF",
+          zIndex: 999,
+          boxShadow: "2px 0 16px rgba(11,61,46,0.18)",
+          transform: open ? "translateX(0)" : "translateX(-100%)",
+          transition: "transform 0.2s ease",
+          display: "flex",
+          flexDirection: "column",
+          overflowY: "auto",
+        }}
+      >
+        <div style={{ padding: "18px 16px", borderBottom: "1px solid rgba(11,61,46,0.12)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <img src={CAMPO_LOGO_COLOR} alt="Campo na Mão" style={{ height: "24px" }} />
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#6E7A61", padding: 4 }} aria-label="Fechar menu">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ padding: "8px 8px", display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
+          {items.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => {
+                setTab(id);
+                onClose();
+              }}
+              style={{
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                background: tab === id ? "rgba(184,134,46,0.14)" : "transparent",
+                border: "none",
+                borderRadius: 10,
+                cursor: "pointer",
+                color: tab === id ? "#B8862E" : "#1F3324",
+                padding: "12px 14px",
+                fontSize: 14,
+                fontWeight: tab === id ? 700 : 500,
+                textAlign: "left",
+                width: "100%",
+              }}
+            >
+              <span style={{ position: "relative", display: "flex" }}>
+                <Icon size={19} />
+                {id === "overview" && alertCount > 0 && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: -3,
+                      right: -5,
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: "#B5453A",
+                    }}
+                  />
+                )}
+              </span>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {profile && (
+          <div style={{ padding: 14, borderTop: "1px solid rgba(11,61,46,0.12)" }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{profile.nome}</div>
+            <div style={{ fontSize: 11, color: "#B8862E", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+              {profile.role}
+            </div>
+            <button
+              onClick={onLogout}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                background: "rgba(196,100,75,0.12)",
+                border: "none",
+                borderRadius: 8,
+                padding: "9px 12px",
+                cursor: "pointer",
+                color: "#A83B2E",
+                fontSize: 13,
+                fontWeight: 600,
+                width: "100%",
+              }}
+            >
+              <LogOut size={15} />
+              Sair
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
