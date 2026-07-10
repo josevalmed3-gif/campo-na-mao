@@ -8347,6 +8347,37 @@ function AvesLotesSecao({ lotes, producao, mortalidade, fazendas, apiFetch, relo
 }
 
 function AvesPosturaSecao({ lotes, producao, apiFetch, reload, setBanner }) {
+  const [secao, setSecao] = useState("lancar");
+
+  const pillStyle = (active) => ({
+    background: active ? "#8C6A3F" : "#FFFFFF",
+    color: active ? "#FFFFFF" : "#6E7A61",
+    border: "1px solid " + (active ? "#8C6A3F" : "rgba(11,61,46,0.14)"),
+    borderRadius: 20,
+    padding: "6px 14px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  });
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto" }}>
+        <button onClick={() => setSecao("lancar")} style={pillStyle(secao === "lancar")}>
+          Lançar
+        </button>
+        <button onClick={() => setSecao("estatisticas")} style={pillStyle(secao === "estatisticas")}>
+          Estatísticas
+        </button>
+      </div>
+      {secao === "lancar" && <AvesPosturaLancarSecao lotes={lotes} producao={producao} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
+      {secao === "estatisticas" && <AvesEstatisticasSecao lotes={lotes} producao={producao} />}
+    </div>
+  );
+}
+
+function AvesPosturaLancarSecao({ lotes, producao, apiFetch, reload, setBanner }) {
   const [form, setForm] = useState({ lote_id: "", data: todayISO(), quantidade_ovos: "", ovos_quebrados: "", observacoes: "" });
   const [saving, setSaving] = useState(false);
 
@@ -8434,6 +8465,190 @@ function AvesPosturaSecao({ lotes, producao, apiFetch, reload, setBanner }) {
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function AvesEstatisticasSecao({ lotes, producao }) {
+  const hoje = todayISO();
+  const inicioMes = hoje.slice(0, 8) + "01";
+  const dia7atras = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().slice(0, 10);
+  })();
+  const dia30atras = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const [dataInicio, setDataInicio] = useState(dia30atras);
+  const [dataFim, setDataFim] = useState(hoje);
+  const [loteFiltro, setLoteFiltro] = useState("");
+
+  const preset = (ini) => {
+    setDataInicio(ini);
+    setDataFim(hoje);
+  };
+
+  const inRange = (d) => d && d >= dataInicio && d <= dataFim;
+  const numDias = Math.max(1, Math.round((new Date(dataFim) - new Date(dataInicio)) / 86400000) + 1);
+  const fmtN = (n, casas = 1) => Number(n || 0).toFixed(casas);
+
+  const lotesOrdenados = [...lotes].sort((a, b) => (a.data_alojamento < b.data_alojamento ? 1 : -1));
+
+  const producaoPeriodo = producao.filter((p) => inRange(p.data) && (loteFiltro === "" || p.lote_id === loteFiltro));
+
+  const totalOvos = producaoPeriodo.reduce((s, p) => s + Number(p.quantidade_ovos || 0), 0);
+  const totalQuebrados = producaoPeriodo.reduce((s, p) => s + Number(p.ovos_quebrados || 0), 0);
+  const mediaDiaria = totalOvos / numDias;
+  const totalBrutoOvos = totalOvos + totalQuebrados;
+  const percQuebra = totalBrutoOvos > 0 ? (totalQuebrados / totalBrutoOvos) * 100 : null;
+
+  const taxas = producaoPeriodo
+    .map((p) => {
+      const lote = lotes.find((l) => l.id === p.lote_id);
+      if (!lote || !lote.quantidade_alojada) return null;
+      return (Number(p.quantidade_ovos) / Number(lote.quantidade_alojada)) * 100;
+    })
+    .filter((t) => t != null);
+  const taxaMedia = taxas.length > 0 ? taxas.reduce((s, t) => s + t, 0) / taxas.length : null;
+
+  const melhorDia = producaoPeriodo.length > 0 ? producaoPeriodo.reduce((max, p) => (Number(p.quantidade_ovos) > Number(max.quantidade_ovos) ? p : max)) : null;
+
+  // evolução diária (soma por data, cobrindo todos os lotes filtrados)
+  const porData = {};
+  producaoPeriodo.forEach((p) => {
+    porData[p.data] = (porData[p.data] || 0) + Number(p.quantidade_ovos || 0);
+  });
+  const datasOrdenadas = Object.keys(porData).sort();
+  const labelsEvolucao = datasOrdenadas.map((d) => formatDataBR(d));
+  const valoresEvolucao = datasOrdenadas.map((d) => porData[d]);
+
+  // ranking por lote (só faz sentido quando "todos os lotes" está selecionado)
+  const rankingLotes = lotesOrdenados
+    .map((l) => {
+      const registros = producao.filter((p) => p.lote_id === l.id && inRange(p.data));
+      if (registros.length === 0) return null;
+      const total = registros.reduce((s, p) => s + Number(p.quantidade_ovos || 0), 0);
+      const taxaLote = l.quantidade_alojada ? (total / registros.length / Number(l.quantidade_alojada)) * 100 : null;
+      return { lote: l, total, taxaLote, registros: registros.length };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.total - a.total);
+
+  const btnPreset = (label, onClick, active) => (
+    <button
+      key={label}
+      onClick={onClick}
+      style={{
+        background: active ? "#8C6A3F" : "#FFFFFF",
+        color: active ? "#F5F2E9" : "#1F3324",
+        border: "1px solid rgba(11,61,46,0.14)",
+        borderRadius: 8,
+        padding: "8px 12px",
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div>
+      <SectionTitle>Estatísticas de produção de ovos</SectionTitle>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12, marginBottom: 12, overflowX: "auto" }}>
+        {btnPreset("7 dias", () => preset(dia7atras), dataInicio === dia7atras && dataFim === hoje)}
+        {btnPreset("30 dias", () => preset(dia30atras), dataInicio === dia30atras && dataFim === hoje)}
+        {btnPreset("Este mês", () => preset(inicioMes), dataInicio === inicioMes && dataFim === hoje)}
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="De" type="date" value={dataInicio} onChange={setDataInicio} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Até" type="date" value={dataFim} onChange={setDataFim} />
+        </div>
+      </div>
+
+      <label style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 18 }}>
+        <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>Lote</span>
+        <select
+          value={loteFiltro}
+          onChange={(e) => setLoteFiltro(e.target.value)}
+          style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
+        >
+          <option value="">Todos os lotes</option>
+          {lotesOrdenados.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.nome}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {producaoPeriodo.length === 0 ? (
+        <EmptyState text="Nenhuma postura lançada nesse período." />
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 22 }}>
+            <IndicadorCard label="Total de ovos coletados" value={totalOvos} color="#8C6A3F" />
+            <IndicadorCard label="Média diária" value={`${fmtN(mediaDiaria)} ovos/dia`} color="#8C6A3F" />
+            <IndicadorCard label="Taxa de postura média" value={taxaMedia != null ? `${fmtN(taxaMedia)}%` : "—"} sub="Ovos coletados ÷ aves alojadas" />
+            <IndicadorCard
+              label="Ovos quebrados/trincados"
+              value={totalQuebrados}
+              sub={percQuebra != null ? `${fmtN(percQuebra)}% do total` : ""}
+              color={percQuebra != null && percQuebra > 5 ? "#B5453A" : undefined}
+            />
+            {melhorDia && (
+              <IndicadorCard
+                label="Melhor dia do período"
+                value={`${melhorDia.quantidade_ovos} ovos`}
+                sub={formatDataBR(melhorDia.data) + (loteFiltro === "" ? ` • ${(lotes.find((l) => l.id === melhorDia.lote_id) || {}).nome || ""}` : "")}
+              />
+            )}
+            <IndicadorCard label="Lançamentos no período" value={producaoPeriodo.length} />
+          </div>
+
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ fontSize: 12, color: "#B8862E", fontWeight: 700, textTransform: "uppercase", marginBottom: 10, letterSpacing: "0.03em" }}>
+              Evolução diária
+            </div>
+            <div style={{ height: 220, background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: 12 }}>
+              <LineChartCanvasOnly labels={labelsEvolucao} valores={valoresEvolucao} color="#8C6A3F" />
+            </div>
+          </div>
+
+          {loteFiltro === "" && rankingLotes.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, color: "#B8862E", fontWeight: 700, textTransform: "uppercase", marginBottom: 10, letterSpacing: "0.03em" }}>
+                Produção por lote no período
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {rankingLotes.map(({ lote, total, taxaLote, registros }) => (
+                  <div key={lote.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{lote.nome}</div>
+                      <div style={{ fontSize: 11, color: "#6E7A61", marginTop: 2 }}>{registros} lançamento(s)</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, fontFamily: "'JetBrains Mono', monospace" }}>{total} ovos</div>
+                      {taxaLote != null && <div style={{ fontSize: 11, color: "#6E7A61" }}>{fmtN(taxaLote)}% média</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
