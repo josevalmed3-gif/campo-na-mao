@@ -276,6 +276,8 @@ function formatDataBR(dataISO) {
 function RebanhoApp() {
   const [session, setSession] = useState(null); // { access_token, user }
   const [profile, setProfile] = useState(null); // { nome, role }
+  const profileRef = useRef(null);
+  profileRef.current = profile;
   const [authMode, setAuthMode] = useState("login"); // login | signup | recover
   const [authForm, setAuthForm] = useState({ email: "", password: "", nome: "" });
   const [authLoading, setAuthLoading] = useState(false);
@@ -337,7 +339,7 @@ function RebanhoApp() {
 
   const uploadFoto = useCallback(
     async (file) => {
-      if (profile?.role === "visualizador") throw new Error("Seu usuário é somente visualização e não pode enviar arquivos.");
+      if (profileRef.current?.role === "visualizador") throw new Error("Seu usuário é somente visualização e não pode enviar arquivos.");
       const token = session?.access_token || SUPABASE_KEY;
       const blob = await compressImage(file);
       const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
@@ -360,12 +362,12 @@ function RebanhoApp() {
       }
       return `${SUPABASE_URL}/storage/v1/object/public/fotos-animais/${filename}`;
     },
-    [session, profile]
+    [session]
   );
 
   const uploadMidiaConfinamento = useCallback(
     async (file) => {
-      if (profile?.role === "visualizador") throw new Error("Seu usuário é somente visualização e não pode enviar arquivos.");
+      if (profileRef.current?.role === "visualizador") throw new Error("Seu usuário é somente visualização e não pode enviar arquivos.");
       const token = session?.access_token || SUPABASE_KEY;
       const isImage = file.type.startsWith("image/");
       const isVideo = file.type.startsWith("video/");
@@ -393,12 +395,12 @@ function RebanhoApp() {
       }
       return { url: `${SUPABASE_URL}/storage/v1/object/public/midias-confinamento/${filename}`, tipo: midiaTipo };
     },
-    [session, profile]
+    [session]
   );
 
   const uploadDocumento = useCallback(
     async (file) => {
-      if (profile?.role === "visualizador") throw new Error("Seu usuário é somente visualização e não pode enviar arquivos.");
+      if (profileRef.current?.role === "visualizador") throw new Error("Seu usuário é somente visualização e não pode enviar arquivos.");
       const token = session?.access_token || SUPABASE_KEY;
       const isImage = file.type.startsWith("image/");
       const blob = isImage ? await compressImage(file, 1200, 0.8) : file;
@@ -423,13 +425,13 @@ function RebanhoApp() {
       }
       return `${SUPABASE_URL}/storage/v1/object/public/documentos-animais/${filename}`;
     },
-    [session, profile]
+    [session]
   );
 
   const apiFetch = useCallback(
     async (path, options = {}) => {
       const method = (options.method || "GET").toUpperCase();
-      if (profile?.role === "visualizador" && method !== "GET") {
+      if (profileRef.current?.role === "visualizador" && method !== "GET") {
         throw new Error("Seu usuário é somente visualização. Peça a um administrador para fazer essa alteração.");
       }
       const token = session?.access_token || SUPABASE_KEY;
@@ -453,7 +455,7 @@ function RebanhoApp() {
       const text = await res.text();
       return text ? JSON.parse(text) : null;
     },
-    [session, profile]
+    [session]
   );
 
   const loadAll = useCallback(async () => {
