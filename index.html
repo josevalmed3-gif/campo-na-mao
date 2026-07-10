@@ -773,6 +773,10 @@ function RebanhoApp() {
             ocupacoes={ocupacoes}
             interacoes={interacoes}
             compradores={compradores}
+            avesLotes={avesLotes}
+            avesProducao={avesProducao}
+            avesMortalidade={avesMortalidade}
+            profile={profile}
             loading={dataLoading}
           />
         )}
@@ -1739,6 +1743,38 @@ function computeRanking(animals, production, monthPrefix, top) {
   };
 }
 
+function computeEvolucaoOvos(producao, dias) {
+  const hoje = todayISO();
+  const labels = [];
+  const valores = [];
+  for (let i = dias - 1; i >= 0; i--) {
+    const dia = addDias(hoje, -i);
+    labels.push(dia.slice(8, 10) + "/" + dia.slice(5, 7));
+    const total = producao.filter((p) => p.data === dia).reduce((s, p) => s + Number(p.quantidade_ovos || 0), 0);
+    valores.push(total);
+  }
+  return { labels, valores };
+}
+
+function computeRankingLotesOvos(lotes, producao, monthPrefix, top) {
+  const totals = {};
+  producao.forEach((p) => {
+    if (!p.data.startsWith(monthPrefix)) return;
+    totals[p.lote_id] = (totals[p.lote_id] || 0) + Number(p.quantidade_ovos || 0);
+  });
+  const rows = Object.entries(totals)
+    .map(([loteId, total]) => {
+      const l = lotes.find((x) => x.id === loteId);
+      return { nome: l ? l.nome : "Lote removido", total };
+    })
+    .sort((a, b) => b.total - a.total)
+    .slice(0, top);
+  return {
+    labels: rows.map((r) => r.nome),
+    valores: rows.map((r) => r.total),
+  };
+}
+
 function computeRankingDetalhado(animals, production, monthPrefix) {
   const totals = {};
   const dias = {};
@@ -2123,7 +2159,7 @@ function RelatorioHorarioCard({ animals, production }) {
   );
 }
 
-function Overview({ animals, production, documentos, healthRecords, protocolos, piquetes, ocupacoes, interacoes, compradores, loading }) {
+function Overview({ animals, production, documentos, healthRecords, protocolos, piquetes, ocupacoes, interacoes, compradores, avesLotes, avesProducao, avesMortalidade, profile, loading }) {
   const today = todayISO();
   const monthPrefix = today.slice(0, 7);
   const [dismissed, setDismissed] = useState([]);
@@ -2131,6 +2167,10 @@ function Overview({ animals, production, documentos, healthRecords, protocolos, 
   useEffect(() => {
     setDismissed(loadDismissedAlerts());
   }, []);
+
+  const acessos = profile?.role === "administrador" ? ["leite", "corte", "bezerro", "aves"] : profile?.acesso_rebanhos || [];
+  const temLeite = profile?.role === "administrador" || acessos.includes("leite");
+  const temAves = profile?.role === "administrador" || acessos.includes("aves");
 
   const emLactacao = animals.filter((a) => a.status === "lactacao").length;
   const secas = animals.filter((a) => a.status === "seca").length;
@@ -2146,6 +2186,30 @@ function Overview({ animals, production, documentos, healthRecords, protocolos, 
     { label: "Em lactação", value: emLactacao, color: "#5BAA47" },
     { label: "Secas", value: secas, color: "#B8862E" },
     { label: "Prenhes", value: prenhes, color: "#3E7C99" },
+  ];
+
+  const avesLotesAtivos = (avesLotes || []).filter((l) => l.status !== "encerrado");
+  const ovosHoje = (avesProducao || []).filter((p) => p.data === today).reduce((s, p) => s + Number(p.quantidade_ovos || 0), 0);
+  const producaoOvosMes = (avesProducao || []).filter((p) => p.data.startsWith(monthPrefix));
+  const ovosMes = producaoOvosMes.reduce((s, p) => s + Number(p.quantidade_ovos || 0), 0);
+  const totalAlojadoAtivo = avesLotesAtivos.reduce((s, l) => s + Number(l.quantidade_alojada || 0), 0);
+  const taxasPosturaMes = producaoOvosMes
+    .map((p) => {
+      const lote = (avesLotes || []).find((l) => l.id === p.lote_id);
+      if (!lote || !lote.quantidade_alojada) return null;
+      return (Number(p.quantidade_ovos) / Number(lote.quantidade_alojada)) * 100;
+    })
+    .filter((t) => t != null);
+  const taxaPosturaMedia = taxasPosturaMes.length > 0 ? (taxasPosturaMes.reduce((s, t) => s + t, 0) / taxasPosturaMes.length).toFixed(1) : "0";
+  const mortalidadeMes = (avesMortalidade || []).filter((m) => m.data.startsWith(monthPrefix)).reduce((s, m) => s + Number(m.quantidade || 0), 0);
+
+  const avesStats = [
+    { label: "Ovos hoje", value: ovosHoje, color: "#8C6A3F" },
+    { label: "Ovos no mês", value: ovosMes, color: "#B8862E" },
+    { label: "Taxa de postura (mês)", value: `${taxaPosturaMedia}%`, color: "#5BAA47" },
+    { label: "Aves alojadas", value: totalAlojadoAtivo, color: "#3E7C99" },
+    { label: "Mortalidade no mês", value: mortalidadeMes, color: "#B5453A" },
+    { label: "Lotes ativos", value: avesLotesAtivos.length, color: "#6E7A61" },
   ];
 
   const todosAlertas = computeAlerts(animals, production, documentos, healthRecords, protocolos, piquetes, ocupacoes, interacoes, compradores);
@@ -2230,49 +2294,121 @@ function Overview({ animals, production, documentos, healthRecords, protocolos, 
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 20 }}>
-        {stats.map((s) => (
-          <div
-            key={s.label}
-            style={{
-              background: "#FFFFFF",
-              border: "1px solid rgba(11,61,46,0.12)",
-              borderRadius: 14,
-              padding: "16px 18px",
-            }}
-          >
+      {temLeite && (
+        <React.Fragment>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 20 }}>
+            {stats.map((s) => (
+              <div
+                key={s.label}
+                style={{
+                  background: "#FFFFFF",
+                  border: "1px solid rgba(11,61,46,0.12)",
+                  borderRadius: 14,
+                  padding: "16px 18px",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 26,
+                    fontWeight: 600,
+                    color: s.color,
+                  }}
+                >
+                  {s.value}
+                </div>
+                <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 4 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <LineChartCard
+            title="Evolução da produção (últimos 14 dias)"
+            labels={computeEvolucao(production, 14).labels}
+            valores={computeEvolucao(production, 14).valores}
+            color="#B8862E"
+          />
+
+          <BarChartCard
+            title="Ranking de produção no mês (top 5)"
+            labels={computeRanking(animals, production, monthPrefix, 5).labels}
+            valores={computeRanking(animals, production, monthPrefix, 5).valores}
+            color="#5BAA47"
+          />
+
+          <RankingList animals={animals} production={production} monthPrefix={monthPrefix} />
+
+          <RelatorioHorarioCard animals={animals} production={production} />
+        </React.Fragment>
+      )}
+
+      {temAves && (
+        <React.Fragment>
+          <div style={{ marginTop: temLeite ? 28 : 20, marginBottom: 4 }}>
+            <div style={{ fontSize: 12, color: "#6E7A61", fontWeight: 700, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+              <Egg size={14} /> Aves
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 8 }}>
+            {avesStats.map((s) => (
+              <div
+                key={s.label}
+                style={{
+                  background: "#FFFFFF",
+                  border: "1px solid rgba(11,61,46,0.12)",
+                  borderRadius: 14,
+                  padding: "16px 18px",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 26,
+                    fontWeight: 600,
+                    color: s.color,
+                  }}
+                >
+                  {s.value}
+                </div>
+                <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 4 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {avesLotesAtivos.length === 0 ? (
             <div
               style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 26,
-                fontWeight: 600,
-                color: s.color,
+                background: "#FFFFFF",
+                border: "1px solid rgba(11,61,46,0.12)",
+                borderRadius: 14,
+                padding: "16px",
+                marginTop: 16,
+                fontSize: 13,
+                color: "#6E7A61",
               }}
             >
-              {s.value}
+              Nenhum lote de aves ativo no momento.
             </div>
-            <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 4 }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
+          ) : (
+            <React.Fragment>
+              <LineChartCard
+                title="Coleta de ovos (últimos 14 dias)"
+                labels={computeEvolucaoOvos(avesProducao || [], 14).labels}
+                valores={computeEvolucaoOvos(avesProducao || [], 14).valores}
+                color="#8C6A3F"
+              />
 
-      <LineChartCard
-        title="Evolução da produção (últimos 14 dias)"
-        labels={computeEvolucao(production, 14).labels}
-        valores={computeEvolucao(production, 14).valores}
-        color="#B8862E"
-      />
-
-      <BarChartCard
-        title="Ranking de produção no mês (top 5)"
-        labels={computeRanking(animals, production, monthPrefix, 5).labels}
-        valores={computeRanking(animals, production, monthPrefix, 5).valores}
-        color="#5BAA47"
-      />
-
-      <RankingList animals={animals} production={production} monthPrefix={monthPrefix} />
-
-      <RelatorioHorarioCard animals={animals} production={production} />
+              <BarChartCard
+                title="Ranking de postura por lote no mês (top 5)"
+                labels={computeRankingLotesOvos(avesLotes || [], avesProducao || [], monthPrefix, 5).labels}
+                valores={computeRankingLotesOvos(avesLotes || [], avesProducao || [], monthPrefix, 5).valores}
+                color="#B8862E"
+              />
+            </React.Fragment>
+          )}
+        </React.Fragment>
+      )}
     </div>
   );
 }
