@@ -24,7 +24,13 @@
 <body>
 <div id="root"></div>
 <script type="text/plain" id="app-source">
-const { useState, useEffect, useCallback, useRef } = React;
+const { useState, useEffect, useCallback, useRef, useContext, createContext } = React;
+
+// ---------------- MODO SOMENTE VISUALIZAÇÃO ----------------
+const ReadOnlyContext = createContext(false);
+function useReadOnly() {
+  return useContext(ReadOnlyContext);
+}
 
 // ---------------- ÍCONES (SVG, sem dependências externas) ----------------
 function iconProps(size) {
@@ -311,6 +317,7 @@ function RebanhoApp() {
 
   const uploadFoto = useCallback(
     async (file) => {
+      if (profile?.role === "visualizador") throw new Error("Seu usuário é somente visualização e não pode enviar arquivos.");
       const token = session?.access_token || SUPABASE_KEY;
       const blob = await compressImage(file);
       const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
@@ -333,11 +340,12 @@ function RebanhoApp() {
       }
       return `${SUPABASE_URL}/storage/v1/object/public/fotos-animais/${filename}`;
     },
-    [session]
+    [session, profile]
   );
 
   const uploadMidiaConfinamento = useCallback(
     async (file) => {
+      if (profile?.role === "visualizador") throw new Error("Seu usuário é somente visualização e não pode enviar arquivos.");
       const token = session?.access_token || SUPABASE_KEY;
       const isImage = file.type.startsWith("image/");
       const isVideo = file.type.startsWith("video/");
@@ -365,11 +373,12 @@ function RebanhoApp() {
       }
       return { url: `${SUPABASE_URL}/storage/v1/object/public/midias-confinamento/${filename}`, tipo: midiaTipo };
     },
-    [session]
+    [session, profile]
   );
 
   const uploadDocumento = useCallback(
     async (file) => {
+      if (profile?.role === "visualizador") throw new Error("Seu usuário é somente visualização e não pode enviar arquivos.");
       const token = session?.access_token || SUPABASE_KEY;
       const isImage = file.type.startsWith("image/");
       const blob = isImage ? await compressImage(file, 1200, 0.8) : file;
@@ -394,11 +403,15 @@ function RebanhoApp() {
       }
       return `${SUPABASE_URL}/storage/v1/object/public/documentos-animais/${filename}`;
     },
-    [session]
+    [session, profile]
   );
 
   const apiFetch = useCallback(
     async (path, options = {}) => {
+      const method = (options.method || "GET").toUpperCase();
+      if (profile?.role === "visualizador" && method !== "GET") {
+        throw new Error("Seu usuário é somente visualização. Peça a um administrador para fazer essa alteração.");
+      }
       const token = session?.access_token || SUPABASE_KEY;
       const res = await fetch(`${SUPABASE_URL}${path}`, {
         ...options,
@@ -420,7 +433,7 @@ function RebanhoApp() {
       const text = await res.text();
       return text ? JSON.parse(text) : null;
     },
-    [session]
+    [session, profile]
   );
 
   const loadAll = useCallback(async () => {
@@ -696,6 +709,7 @@ function RebanhoApp() {
   }
 
   return (
+    <ReadOnlyContext.Provider value={profile?.role === "visualizador"}>
     <div style={{ background: "#F5F2E9", minHeight: "100vh", fontFamily: "'Inter', sans-serif", color: "#1F3324" }}>
       <style>{FONTS}</style>
       <TopBar profile={profile} onLogout={logout} onSettings={() => setShowSettings(true)} />
@@ -882,6 +896,7 @@ function RebanhoApp() {
       </div>
       <BottomNav tab={tab} setTab={setTab} profile={profile} alertCount={computeAlerts(animals, production, documentos, healthRecords, protocolos, piquetes, ocupacoes, interacoes, compradores).filter((a) => a.level === "urgente").length} />
     </div>
+    </ReadOnlyContext.Provider>
   );
 }
 
@@ -5852,8 +5867,8 @@ function UsuariosTab({ users, currentUserId, apiFetch, reload, setBanner }) {
     }
   };
 
-  const roleLabel = { pendente: "Pendente", operador: "Operador", administrador: "Administrador" };
-  const roleColor = { pendente: "#B5453A", operador: "#5BAA47", administrador: "#B8862E" };
+  const roleLabel = { pendente: "Pendente", operador: "Operador", administrador: "Administrador", visualizador: "Visualização" };
+  const roleColor = { pendente: "#B5453A", operador: "#5BAA47", administrador: "#B8862E", visualizador: "#3E7C99" };
 
   const pendentes = users.filter((u) => u.role === "pendente" && u.ativo !== false);
   const aprovados = users.filter((u) => u.role !== "pendente" && u.ativo !== false);
@@ -5916,6 +5931,24 @@ function UsuariosTab({ users, currentUserId, apiFetch, reload, setBanner }) {
                     }}
                   >
                     Como admin
+                  </button>
+                  <button
+                    onClick={() => setRole(u, "visualizador")}
+                    disabled={savingId === u.id}
+                    style={{
+                      background: "rgba(62,124,153,0.12)",
+                      border: "1px solid #3E7C99",
+                      borderRadius: 8,
+                      padding: "9px 12px",
+                      color: "#3E7C99",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: savingId === u.id ? "default" : "pointer",
+                      opacity: savingId === u.id ? 0.6 : 1,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Só visualizar
                   </button>
                 </div>
               </div>
@@ -6059,7 +6092,7 @@ function UsuarioRow({ user, isSelf, saving, roleLabel, roleColor, onSetRole, onS
         </div>
       </div>
 
-      {user.role === "operador" && (
+      {(user.role === "operador" || user.role === "visualizador") && (
         <div style={{ marginTop: 10 }}>
           <div style={{ fontSize: 10, color: "#6E7A61", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>
             Acesso aos rebanhos
@@ -6090,24 +6123,33 @@ function UsuarioRow({ user, isSelf, saving, roleLabel, roleColor, onSetRole, onS
       )}
 
       <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-        <button
-          onClick={() => onSetRole(user, user.role === "administrador" ? "operador" : "administrador")}
-          disabled={saving}
-          style={{
-            flex: 1,
-            background: "rgba(11,61,46,0.10)",
-            border: "1px solid rgba(11,61,46,0.18)",
-            borderRadius: 8,
-            padding: "8px 6px",
-            color: "#1F3324",
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: saving ? "default" : "pointer",
-            opacity: saving ? 0.6 : 1,
-          }}
-        >
-          {saving ? "Salvando..." : user.role === "administrador" ? "Tornar operador" : "Tornar admin"}
-        </button>
+        {[
+          ["operador", "Operador"],
+          ["administrador", "Admin"],
+          ["visualizador", "Visualização"],
+        ].map(([roleValue, label]) => (
+          <button
+            key={roleValue}
+            onClick={() => onSetRole(user, roleValue)}
+            disabled={saving || user.role === roleValue}
+            style={{
+              flex: 1,
+              background: user.role === roleValue ? "rgba(11,61,46,0.18)" : "rgba(11,61,46,0.08)",
+              border: "1px solid rgba(11,61,46,0.18)",
+              borderRadius: 8,
+              padding: "8px 4px",
+              color: "#1F3324",
+              fontSize: 10,
+              fontWeight: 600,
+              cursor: saving || user.role === roleValue ? "default" : "pointer",
+              opacity: saving ? 0.6 : user.role === roleValue ? 0.5 : 1,
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
         <button
           onClick={onExcluir}
           disabled={saving}
@@ -10350,6 +10392,8 @@ function CicloLeiteSecao({ financeiro, entregas, production, apiFetch, reload, s
 
 // ---------------- SHARED ----------------
 function IconButton({ onClick, active }) {
+  const readOnly = useReadOnly();
+  if (readOnly && !active) return null;
   return (
     <button
       onClick={onClick}
@@ -10372,6 +10416,24 @@ function IconButton({ onClick, active }) {
 }
 
 function SaveButton({ saving }) {
+  const readOnly = useReadOnly();
+  if (readOnly) {
+    return (
+      <div
+        style={{
+          background: "rgba(11,61,46,0.08)",
+          color: "#6E7A61",
+          borderRadius: 10,
+          padding: "11px 0",
+          fontWeight: 600,
+          fontSize: 13,
+          textAlign: "center",
+        }}
+      >
+        Modo somente visualização — não é possível salvar
+      </div>
+    );
+  }
   return (
     <button
       type="submit"
