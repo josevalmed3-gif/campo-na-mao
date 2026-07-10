@@ -294,6 +294,7 @@ function RebanhoApp() {
   const [avesMortalidade, setAvesMortalidade] = useState([]);
   const [avesRacao, setAvesRacao] = useState([]);
   const [avesVendas, setAvesVendas] = useState([]);
+  const [avesVendasAnimais, setAvesVendasAnimais] = useState([]);
   const [insumos, setInsumos] = useState([]);
   const [comprasInsumos, setComprasInsumos] = useState([]);
   const [funcionarios, setFuncionarios] = useState([]);
@@ -536,6 +537,10 @@ function RebanhoApp() {
         setAvesVendas(av || []);
       } catch (e) {}
       try {
+        const vva = await apiFetch(`/rest/v1/aves_vendas_animais?select=*&order=data.desc&limit=500`);
+        setAvesVendasAnimais(vva || []);
+      } catch (e) {}
+      try {
         const ins = await apiFetch(`/rest/v1/insumos?select=*&order=nome.asc`);
         setInsumos(ins || []);
       } catch (e) {}
@@ -764,6 +769,7 @@ function RebanhoApp() {
             avesMortalidade={avesMortalidade}
             avesRacao={avesRacao}
             avesVendas={avesVendas}
+            avesVendasAnimais={avesVendasAnimais}
             compradores={compradores}
             apiFetch={apiFetch}
             uploadFoto={uploadFoto}
@@ -2498,6 +2504,7 @@ function AnimaisTab({
   avesMortalidade,
   avesRacao,
   avesVendas,
+  avesVendasAnimais,
   compradores,
   apiFetch,
   uploadFoto,
@@ -3128,6 +3135,8 @@ function AnimaisTab({
             producao={avesProducao}
             mortalidade={avesMortalidade}
             racao={avesRacao}
+            vendasAnimais={avesVendasAnimais}
+            compradores={compradores}
             fazendas={fazendas}
             apiFetch={apiFetch}
             reload={reload}
@@ -8231,7 +8240,7 @@ function ComunicadosMelhoramentoSecao({ programas, comunicados, animals, apiFetc
 }
 
 // ---------------- AVES (POSTURA / OVOS) ----------------
-function AvesTab({ lotes, producao, mortalidade, racao, fazendas, apiFetch, reload, setBanner }) {
+function AvesTab({ lotes, producao, mortalidade, racao, vendasAnimais, compradores, fazendas, apiFetch, reload, setBanner }) {
   const [secao, setSecao] = useState("lotes");
 
   const pillStyle = (active) => ({
@@ -8250,6 +8259,7 @@ function AvesTab({ lotes, producao, mortalidade, racao, fazendas, apiFetch, relo
     ["lotes", "Lotes"],
     ["mortalidade", "Mortalidade"],
     ["racao", "Ração"],
+    ["venda", "Venda de aves"],
   ];
 
   return (
@@ -8268,6 +8278,7 @@ function AvesTab({ lotes, producao, mortalidade, racao, fazendas, apiFetch, relo
       {secao === "lotes" && <AvesLotesSecao lotes={lotes} producao={producao} mortalidade={mortalidade} fazendas={fazendas} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
       {secao === "mortalidade" && <AvesMortalidadeSecao lotes={lotes} mortalidade={mortalidade} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
       {secao === "racao" && <AvesRacaoSecao lotes={lotes} racao={racao} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
+      {secao === "venda" && <AvesVendaAnimaisSecao lotes={lotes} mortalidade={mortalidade} vendas={vendasAnimais} compradores={compradores} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
     </div>
   );
 }
@@ -8901,6 +8912,234 @@ function AvesRacaoSecao({ lotes, racao, apiFetch, reload, setBanner }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function AvesVendaAnimaisSecao({ lotes, mortalidade, vendas, compradores, apiFetch, reload, setBanner }) {
+  const compradoresAves = compradores.filter((c) => (c.categorias || []).includes("aves"));
+  const compradoresParaSelecao = compradoresAves.length > 0 ? compradoresAves : compradores;
+  const lotesDisponiveis = lotes.filter((l) => l.status !== "encerrado");
+
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    data: todayISO(),
+    lote_id: "",
+    comprador_id: "",
+    quantidade: "",
+    unidade_preco: "unidade",
+    peso_total_kg: "",
+    preco_unitario: "",
+    observacoes: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const mortesLote = (loteId) => mortalidade.filter((m) => m.lote_id === loteId).reduce((s, m) => s + Number(m.quantidade || 0), 0);
+  const vendidasLote = (loteId) => vendas.filter((v) => v.lote_id === loteId).reduce((s, v) => s + Number(v.quantidade || 0), 0);
+  const avesDisponiveis = (lote) => Number(lote.quantidade_alojada) - mortesLote(lote.id) - vendidasLote(lote.id);
+
+  const loteSelecionado = lotes.find((l) => l.id === form.lote_id);
+  const baseCalculo = form.unidade_preco === "kg" ? Number(form.peso_total_kg) || 0 : Number(form.quantidade) || 0;
+  const valorTotal = baseCalculo * (Number(form.preco_unitario) || 0);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.quantidade) {
+      setBanner({ type: "error", text: "Informe a quantidade de aves vendidas." });
+      return;
+    }
+    if (!form.preco_unitario) {
+      setBanner({ type: "error", text: "Informe o preço." });
+      return;
+    }
+    if (form.unidade_preco === "kg" && !form.peso_total_kg) {
+      setBanner({ type: "error", text: "Informe o peso total vendido em kg." });
+      return;
+    }
+    if (loteSelecionado && Number(form.quantidade) > avesDisponiveis(loteSelecionado)) {
+      const confirmar = window.confirm(
+        `Esse lote tem ${avesDisponiveis(loteSelecionado)} ave(s) disponível(is), mas você está lançando ${form.quantidade}. Continuar mesmo assim?`
+      );
+      if (!confirmar) return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch(`/rest/v1/aves_vendas_animais`, {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({
+          data: form.data,
+          lote_id: form.lote_id || null,
+          comprador_id: form.comprador_id || null,
+          quantidade: Number(form.quantidade),
+          unidade_preco: form.unidade_preco,
+          peso_total_kg: form.peso_total_kg !== "" ? Number(form.peso_total_kg) : null,
+          preco_unitario: Number(form.preco_unitario),
+          valor_total: valorTotal,
+          observacoes: form.observacoes || null,
+        }),
+      });
+      setBanner({ type: "success", text: "Venda de aves registrada." });
+      setForm({ data: todayISO(), lote_id: "", comprador_id: "", quantidade: "", unidade_preco: "unidade", peso_total_kg: "", preco_unitario: "", observacoes: "" });
+      setShowForm(false);
+      reload();
+    } catch (err) {
+      setBanner({ type: "error", text: "Erro ao salvar: " + err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const marcarRecebido = async (v) => {
+    try {
+      await apiFetch(`/rest/v1/aves_vendas_animais?id=eq.${v.id}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ valor_recebido: v.valor_total, data_recebimento: todayISO() }),
+      });
+      setBanner({ type: "success", text: "Marcado como recebido." });
+      reload();
+    } catch (err) {
+      setBanner({ type: "error", text: "Erro: " + err.message });
+    }
+  };
+
+  const ordenadas = [...vendas].sort((a, b) => (a.data < b.data ? 1 : -1));
+  const totalMes = ordenadas.filter((v) => v.data.slice(0, 7) === todayISO().slice(0, 7)).reduce((s, v) => s + Number(v.valor_total || 0), 0);
+  const avesVendidasMes = ordenadas.filter((v) => v.data.slice(0, 7) === todayISO().slice(0, 7)).reduce((s, v) => s + Number(v.quantidade || 0), 0);
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <SectionTitle>Venda de aves (aves vivas/abatidas)</SectionTitle>
+        <IconButton onClick={() => setShowForm((v) => !v)} active={showForm} />
+      </div>
+      <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 4 }}>
+        Este mês: {avesVendidasMes} ave(s) • R$ {totalMes.toFixed(2)}
+      </div>
+
+      {showForm && (
+        <form onSubmit={submit} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 14, padding: 18, marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+          <Field label="Data" type="date" value={form.data} onChange={(v) => setForm({ ...form, data: v })} required />
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>Lote</span>
+            <select
+              value={form.lote_id}
+              onChange={(e) => setForm({ ...form, lote_id: e.target.value })}
+              style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
+            >
+              <option value="">Não vincular a um lote específico</option>
+              {lotesDisponiveis.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.nome} ({avesDisponiveis(l)} disponíveis)
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>Comprador (opcional)</span>
+            <select
+              value={form.comprador_id}
+              onChange={(e) => setForm({ ...form, comprador_id: e.target.value })}
+              style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
+            >
+              <option value="">Não especificar</option>
+              {compradoresParaSelecao.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <Field label="Quantidade de aves vendidas" type="number" value={form.quantidade} onChange={(v) => setForm({ ...form, quantidade: v })} placeholder="0" required />
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>Venda cobrada por</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[
+                ["unidade", "Por ave"],
+                ["kg", "Por kg (peso vivo/abatido)"],
+              ].map(([v, label]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setForm({ ...form, unidade_preco: v })}
+                  style={{
+                    flex: 1,
+                    background: form.unidade_preco === v ? "#8C6A3F" : "#F5F2E9",
+                    color: form.unidade_preco === v ? "#FFFFFF" : "#6E7A61",
+                    border: "1px solid rgba(11,61,46,0.14)",
+                    borderRadius: 8,
+                    padding: "9px 0",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </label>
+
+          {form.unidade_preco === "kg" && (
+            <Field label="Peso total vendido (kg)" type="number" value={form.peso_total_kg} onChange={(v) => setForm({ ...form, peso_total_kg: v })} placeholder="0.0" required />
+          )}
+
+          <Field
+            label={form.unidade_preco === "kg" ? "Preço por kg (R$)" : "Preço por ave (R$)"}
+            type="number"
+            value={form.preco_unitario}
+            onChange={(v) => setForm({ ...form, preco_unitario: v })}
+            placeholder="0.00"
+            required
+          />
+
+          <div style={{ fontSize: 13, color: "#8C6A3F", fontWeight: 700 }}>Valor total: R$ {valorTotal.toFixed(2)}</div>
+          <Field label="Observações" value={form.observacoes} onChange={(v) => setForm({ ...form, observacoes: v })} />
+          <SaveButton saving={saving} />
+        </form>
+      )}
+
+      <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+        {ordenadas.length === 0 && <EmptyState text="Nenhuma venda de aves registrada ainda." />}
+        {ordenadas.map((v) => {
+          const lote = lotes.find((l) => l.id === v.lote_id);
+          const comprador = compradores.find((c) => c.id === v.comprador_id);
+          const recebido = Number(v.valor_recebido || 0) >= Number(v.valor_total || 0) && Number(v.valor_total || 0) > 0;
+          return (
+            <div key={v.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>
+                    {v.quantidade} ave(s){lote ? ` • ${lote.nome}` : ""}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 2 }}>
+                    {formatDataBR(v.data)}
+                    {comprador ? ` • ${comprador.nome}` : ""}
+                    {v.unidade_preco === "kg" && v.peso_total_kg ? ` • ${Number(v.peso_total_kg).toFixed(1)} kg` : ""}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, fontFamily: "'JetBrains Mono', monospace" }}>R$ {Number(v.valor_total || 0).toFixed(2)}</div>
+                  <Badge color={recebido ? "#5BAA47" : "#B8862E"}>{recebido ? "Recebido" : "A receber"}</Badge>
+                </div>
+              </div>
+              {!recebido && (
+                <button
+                  onClick={() => marcarRecebido(v)}
+                  style={{ marginTop: 10, width: "100%", background: "rgba(124,154,92,0.15)", border: "1px solid #5BAA47", borderRadius: 8, padding: "8px 0", color: "#6FA050", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                >
+                  Marcar como recebido
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -10553,13 +10792,8 @@ try {
   var source = document.getElementById("app-source").textContent;
   var compiled = Babel.transform(source, { presets: ["react"] }).code;
   compiled += "\nReactDOM.createRoot(document.getElementById('root')).render(React.createElement(RebanhoApp));";
-  var blob = new Blob([compiled], { type: "text/javascript" });
-  var blobUrl = URL.createObjectURL(blob);
   var scriptEl = document.createElement("script");
-  scriptEl.src = blobUrl;
-  scriptEl.onerror = function () {
-    showError("ERRO AO CARREGAR SCRIPT", "Falha ao carregar o script compilado.");
-  };
+  scriptEl.textContent = compiled;
   document.body.appendChild(scriptEl);
 } catch (err) {
   showError("ERRO AO COMPILAR", err.message + "\n\n" + (err.stack || ""));
