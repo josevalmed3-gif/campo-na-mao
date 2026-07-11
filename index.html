@@ -697,7 +697,7 @@ function RebanhoApp() {
       if (!session || !session.user || !session.user.id) return;
       try {
         const rows = await apiFetch(
-          `/rest/v1/profiles?select=nome,role,ativo,acesso_rebanhos&id=eq.${session.user.id}`
+          `/rest/v1/profiles?select=nome,role,ativo,acesso_rebanhos,acesso_maquinas&id=eq.${session.user.id}`
         );
         if (rows && rows[0]) setProfile(rows[0]);
       } catch (e) {}
@@ -905,6 +905,7 @@ function RebanhoApp() {
         {tab === "usuarios" && profile?.role === "administrador" && (
           <UsuariosTab
             users={users}
+            maquinas={maquinas}
             currentUserId={session?.user?.id}
             apiFetch={apiFetch}
             reload={loadAll}
@@ -1532,7 +1533,9 @@ function SideDrawer({ open, onClose, tab, setTab, profile, onLogout, alertCount 
   }
   items.push({ id: "saude", label: "Saúde", icon: Stethoscope });
   items.push({ id: "manejo", label: "Manejo", icon: Grid });
-  items.push({ id: "maquinas", label: "Máquinas", icon: Wrench });
+  if (profile?.role === "administrador" || (profile?.acesso_maquinas || []).length > 0) {
+    items.push({ id: "maquinas", label: "Máquinas", icon: Wrench });
+  }
   items.push({ id: "relatorios", label: "Relatórios", icon: BarChart });
   if (profile?.role === "administrador") {
     items.push({ id: "financeiro", label: "Financeiro", icon: DollarSign });
@@ -6100,7 +6103,7 @@ function SettingsModal({ apiFetch, onClose, setBanner }) {
 }
 
 // ---------------- USUÁRIOS (apenas administradores) ----------------
-function UsuariosTab({ users, currentUserId, apiFetch, reload, setBanner }) {
+function UsuariosTab({ users, maquinas, currentUserId, apiFetch, reload, setBanner }) {
   const [savingId, setSavingId] = useState(null);
 
   const setRole = async (user, novoRole) => {
@@ -6195,6 +6198,22 @@ function UsuariosTab({ users, currentUserId, apiFetch, reload, setBanner }) {
         method: "PATCH",
         headers: { Prefer: "return=minimal" },
         body: JSON.stringify({ acesso_rebanhos: novoAcesso }),
+      });
+      reload();
+    } catch (e) {
+      setBanner({ type: "error", text: "Erro ao atualizar acesso: " + e.message });
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const setAcessoMaquinas = async (user, novoAcesso) => {
+    setSavingId(user.id);
+    try {
+      await apiFetch(`/rest/v1/profiles?id=eq.${user.id}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ acesso_maquinas: novoAcesso }),
       });
       reload();
     } catch (e) {
@@ -6300,6 +6319,7 @@ function UsuariosTab({ users, currentUserId, apiFetch, reload, setBanner }) {
           <UsuarioRow
             key={u.id}
             user={u}
+            maquinas={maquinas}
             isSelf={u.id === currentUserId}
             saving={savingId === u.id}
             roleLabel={roleLabel}
@@ -6307,6 +6327,7 @@ function UsuariosTab({ users, currentUserId, apiFetch, reload, setBanner }) {
             onSetRole={setRole}
             onSetNome={setNome}
             onSetAcesso={setAcesso}
+            onSetAcessoMaquinas={setAcessoMaquinas}
             onExcluir={() => setAtivo(u, false)}
           />
         ))}
@@ -6377,7 +6398,7 @@ function UsuariosTab({ users, currentUserId, apiFetch, reload, setBanner }) {
   );
 }
 
-function UsuarioRow({ user, isSelf, saving, roleLabel, roleColor, onSetRole, onSetNome, onSetAcesso, onExcluir }) {
+function UsuarioRow({ user, maquinas, isSelf, saving, roleLabel, roleColor, onSetRole, onSetNome, onSetAcesso, onSetAcessoMaquinas, onExcluir }) {
   const [editandoNome, setEditandoNome] = useState(false);
   const [nomeTemp, setNomeTemp] = useState(user.nome);
 
@@ -6390,6 +6411,12 @@ function UsuarioRow({ user, isSelf, saving, roleLabel, roleColor, onSetRole, onS
   const toggleAcesso = (f) => {
     const novo = acessos.includes(f) ? acessos.filter((x) => x !== f) : [...acessos, f];
     onSetAcesso(user, novo);
+  };
+
+  const acessosMaquinas = user.acesso_maquinas || [];
+  const toggleAcessoMaquina = (id) => {
+    const novo = acessosMaquinas.includes(id) ? acessosMaquinas.filter((x) => x !== id) : [...acessosMaquinas, id];
+    onSetAcessoMaquinas(user, novo);
   };
 
   return (
@@ -6472,6 +6499,35 @@ function UsuarioRow({ user, isSelf, saving, roleLabel, roleColor, onSetRole, onS
                 }}
               >
                 {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(user.role === "operador" || user.role === "visualizador") && maquinas && maquinas.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 10, color: "#6E7A61", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>
+            Acesso às máquinas
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {maquinas.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => toggleAcessoMaquina(m.id)}
+                disabled={saving}
+                style={{
+                  padding: "7px 10px",
+                  borderRadius: 8,
+                  border: "1px solid " + (acessosMaquinas.includes(m.id) ? "#B8862E" : "rgba(11,61,46,0.18)"),
+                  background: acessosMaquinas.includes(m.id) ? "#B8862E22" : "transparent",
+                  color: acessosMaquinas.includes(m.id) ? "#B8862E" : "#6E7A61",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: saving ? "default" : "pointer",
+                }}
+              >
+                {m.nome}
               </button>
             ))}
           </div>
@@ -11308,6 +11364,13 @@ function MaquinasTab({ maquinas, clientes, apontamentos, abastecimentos, manuten
   const isAdmin = profile?.role === "administrador";
   const [subTab, setSubTab] = useState(isAdmin ? "geral" : "apontamentos");
 
+  const idsPermitidos = profile?.acesso_maquinas || [];
+  const maquinasPermitidas = isAdmin ? maquinas : maquinas.filter((m) => idsPermitidos.includes(m.id));
+  const idsVisiveis = new Set(maquinasPermitidas.map((m) => m.id));
+  const apontamentosPermitidos = isAdmin ? apontamentos : apontamentos.filter((a) => idsVisiveis.has(a.maquina_id));
+  const abastecimentosPermitidos = isAdmin ? abastecimentos : abastecimentos.filter((a) => idsVisiveis.has(a.maquina_id));
+  const manutencoesPermitidas = isAdmin ? manutencoes : manutencoes.filter((m) => idsVisiveis.has(m.maquina_id));
+
   const btnStyle = (active) => ({
     flex: 1,
     background: active ? "#B8862E" : "#FFFFFF",
@@ -11320,6 +11383,10 @@ function MaquinasTab({ maquinas, clientes, apontamentos, abastecimentos, manuten
     cursor: "pointer",
     whiteSpace: "nowrap",
   });
+
+  if (!isAdmin && maquinasPermitidas.length === 0) {
+    return <EmptyState text="Você ainda não tem nenhuma máquina liberada. Fale com o administrador." />;
+  }
 
   return (
     <div>
@@ -11343,20 +11410,37 @@ function MaquinasTab({ maquinas, clientes, apontamentos, abastecimentos, manuten
             Financeiro
           </button>
         )}
+        {isAdmin && (
+          <button onClick={() => setSubTab("relatorios")} style={btnStyle(subTab === "relatorios")}>
+            Relatórios
+          </button>
+        )}
       </div>
 
       {subTab === "geral" && isAdmin && <MaquinasGeralSecao maquinas={maquinas} apontamentos={apontamentos} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
       {subTab === "apontamentos" && (
-        <MaquinaApontamentosSecao maquinas={maquinas} clientes={clientes} apontamentos={apontamentos} fazendas={fazendas} isAdmin={isAdmin} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
+        <MaquinaApontamentosSecao
+          maquinas={maquinasPermitidas}
+          clientes={clientes}
+          apontamentos={apontamentosPermitidos}
+          fazendas={fazendas}
+          isAdmin={isAdmin}
+          apiFetch={apiFetch}
+          reload={reload}
+          setBanner={setBanner}
+        />
       )}
       {subTab === "abastecimento" && (
-        <MaquinaAbastecimentoSecao maquinas={maquinas} abastecimentos={abastecimentos} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
+        <MaquinaAbastecimentoSecao maquinas={maquinasPermitidas} abastecimentos={abastecimentosPermitidos} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
       )}
       {subTab === "manutencao" && (
-        <MaquinaManutencaoSecao maquinas={maquinas} manutencoes={manutencoes} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
+        <MaquinaManutencaoSecao maquinas={maquinasPermitidas} manutencoes={manutencoesPermitidas} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
       )}
       {subTab === "financeiro" && isAdmin && (
         <MaquinaFinanceiroSecao maquinas={maquinas} clientes={clientes} apontamentos={apontamentos} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
+      )}
+      {subTab === "relatorios" && isAdmin && (
+        <MaquinaRelatoriosSecao maquinas={maquinas} apontamentos={apontamentos} abastecimentos={abastecimentos} manutencoes={manutencoes} />
       )}
     </div>
   );
@@ -12165,6 +12249,120 @@ function MaquinaManutencaoSecao({ maquinas, manutencoes, apiFetch, reload, setBa
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function MaquinaRelatoriosSecao({ maquinas, apontamentos, abastecimentos, manutencoes }) {
+  const [periodo, setPeriodo] = useState(todayISO().slice(0, 7));
+
+  const noPeriodo = (data) => (data || "").startsWith(periodo);
+
+  const apMes = apontamentos.filter((a) => noPeriodo(a.data));
+  const abMes = abastecimentos.filter((a) => noPeriodo(a.data));
+  const manMes = manutencoes.filter((m) => noPeriodo(m.data));
+
+  const linhas = maquinas.map((m) => {
+    const ap = apMes.filter((a) => a.maquina_id === m.id);
+    const ab = abMes.filter((a) => a.maquina_id === m.id);
+    const man = manMes.filter((mm) => mm.maquina_id === m.id);
+
+    const horas = ap.reduce((s, a) => s + Number(a.horas || 0), 0);
+    const receita = ap.filter((a) => a.destino === "cliente").reduce((s, a) => s + Number(a.valor_total || 0), 0);
+    const litros = ab.reduce((s, a) => s + Number(a.litros || 0), 0);
+    const gastoDiesel = ab.reduce((s, a) => s + Number(a.valor_total || 0), 0);
+    const custoManutencao = man.reduce((s, mm) => s + Number(mm.custo_pecas || 0) + Number(mm.custo_mao_obra || 0), 0);
+    const custoTotal = gastoDiesel + custoManutencao;
+    const resultado = receita - custoTotal;
+    const custoHora = horas > 0 ? custoTotal / horas : null;
+
+    return { maquina: m, horas, receita, litros, gastoDiesel, custoManutencao, custoTotal, resultado };
+  });
+
+  const porOperador = {};
+  apMes.forEach((a) => {
+    const op = a.operador && a.operador.trim() ? a.operador.trim() : "Não informado";
+    porOperador[op] = (porOperador[op] || 0) + Number(a.horas || 0);
+  });
+
+  const totais = linhas.reduce(
+    (acc, l) => ({
+      horas: acc.horas + l.horas,
+      receita: acc.receita + l.receita,
+      gastoDiesel: acc.gastoDiesel + l.gastoDiesel,
+      custoManutencao: acc.custoManutencao + l.custoManutencao,
+      resultado: acc.resultado + l.resultado,
+    }),
+    { horas: 0, receita: 0, gastoDiesel: 0, custoManutencao: 0, resultado: 0 }
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <SectionTitle>Relatórios</SectionTitle>
+        <input
+          type="month"
+          value={periodo}
+          onChange={(e) => setPeriodo(e.target.value)}
+          style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "8px 10px", color: "#1F3324", fontSize: 13 }}
+        />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
+        <div style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 14px" }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#B8862E" }}>{totais.horas.toFixed(1)} h</div>
+          <div style={{ fontSize: 11, color: "#6E7A61" }}>Horas trabalhadas</div>
+        </div>
+        <div style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 14px" }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#5BAA47" }}>R$ {totais.receita.toFixed(2)}</div>
+          <div style={{ fontSize: 11, color: "#6E7A61" }}>Receita de clientes</div>
+        </div>
+        <div style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 14px" }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#3E7C99" }}>R$ {(totais.gastoDiesel + totais.custoManutencao).toFixed(2)}</div>
+          <div style={{ fontSize: 11, color: "#6E7A61" }}>Custo total (diesel + manutenção)</div>
+        </div>
+        <div style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 14px" }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: totais.resultado >= 0 ? "#5BAA47" : "#B5453A" }}>R$ {totais.resultado.toFixed(2)}</div>
+          <div style={{ fontSize: 11, color: "#6E7A61" }}>Resultado do mês</div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <div style={{ fontSize: 12, color: "#6E7A61", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Por máquina</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {linhas.length === 0 && <EmptyState text="Nenhuma máquina cadastrada." />}
+          {linhas.map((l) => (
+            <div key={l.maquina.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{l.maquina.nome}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: 8, fontSize: 12, color: "#6E7A61" }}>
+                <span>{l.horas.toFixed(1)} h trabalhadas</span>
+                <span>R$ {l.receita.toFixed(2)} receita</span>
+                <span>{l.litros.toFixed(1)} L diesel</span>
+                <span>R$ {l.custoManutencao.toFixed(2)} manutenção</span>
+                {l.horas > 0 && <span>R$ {(l.custoTotal / l.horas).toFixed(2)}/h de custo</span>}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 14, fontWeight: 700, color: l.resultado >= 0 ? "#5BAA47" : "#B5453A" }}>
+                Resultado: R$ {l.resultado.toFixed(2)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <div style={{ fontSize: 12, color: "#6E7A61", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Horas por operador</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {Object.keys(porOperador).length === 0 && <EmptyState text="Nenhum apontamento no período." />}
+          {Object.entries(porOperador)
+            .sort((a, b) => b[1] - a[1])
+            .map(([op, horas]) => (
+              <div key={op} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{op}</span>
+                <span style={{ fontSize: 13, color: "#B8862E", fontWeight: 700 }}>{horas.toFixed(1)} h</span>
+              </div>
+            ))}
+        </div>
       </div>
     </div>
   );
