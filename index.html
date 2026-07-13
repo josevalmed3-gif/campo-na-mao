@@ -133,13 +133,6 @@ function Egg({ size, className, style }) {
     </svg>
   );
 }
-function Wrench({ size, className, style }) {
-  return (
-    <svg {...iconProps(size)} className={className} style={style}>
-      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-    </svg>
-  );
-}
 
 
 const SUPABASE_URL = "https://wnsezhwhteztezbpgrpa.supabase.co";
@@ -327,11 +320,6 @@ function RebanhoApp() {
   const [comprasInsumos, setComprasInsumos] = useState([]);
   const [funcionarios, setFuncionarios] = useState([]);
   const [pagamentosMaoObra, setPagamentosMaoObra] = useState([]);
-  const [maquinas, setMaquinas] = useState([]);
-  const [maquinaClientes, setMaquinaClientes] = useState([]);
-  const [maquinaApontamentos, setMaquinaApontamentos] = useState([]);
-  const [maquinaAbastecimentos, setMaquinaAbastecimentos] = useState([]);
-  const [maquinaManutencoes, setMaquinaManutencoes] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [banner, setBanner] = useState(null); // { type, text }
 
@@ -590,26 +578,6 @@ function RebanhoApp() {
         setPagamentosMaoObra(pg || []);
       } catch (e) {}
       try {
-        const mq = await apiFetch(`/rest/v1/maquinas?select=*&order=nome.asc`);
-        setMaquinas(mq || []);
-      } catch (e) {}
-      try {
-        const mc = await apiFetch(`/rest/v1/maquina_clientes?select=*&order=nome.asc`);
-        setMaquinaClientes(mc || []);
-      } catch (e) {}
-      try {
-        const ma = await apiFetch(`/rest/v1/maquina_apontamentos?select=*&order=data.desc&limit=1000`);
-        setMaquinaApontamentos(ma || []);
-      } catch (e) {}
-      try {
-        const mab = await apiFetch(`/rest/v1/maquina_abastecimentos?select=*&order=data.desc&limit=1000`);
-        setMaquinaAbastecimentos(mab || []);
-      } catch (e) {}
-      try {
-        const mman = await apiFetch(`/rest/v1/maquina_manutencoes?select=*&order=data.desc&limit=500`);
-        setMaquinaManutencoes(mman || []);
-      } catch (e) {}
-      try {
         const u = await apiFetch(`/rest/v1/profiles?select=*&order=nome.asc`);
         setUsers(u || []);
       } catch (e) {}
@@ -697,7 +665,7 @@ function RebanhoApp() {
       if (!session || !session.user || !session.user.id) return;
       try {
         const rows = await apiFetch(
-          `/rest/v1/profiles?select=nome,role,ativo,acesso_rebanhos,acesso_maquinas&id=eq.${session.user.id}`
+          `/rest/v1/profiles?select=nome,role,ativo,acesso_rebanhos&id=eq.${session.user.id}`
         );
         if (rows && rows[0]) setProfile(rows[0]);
       } catch (e) {}
@@ -905,7 +873,6 @@ function RebanhoApp() {
         {tab === "usuarios" && profile?.role === "administrador" && (
           <UsuariosTab
             users={users}
-            maquinas={maquinas}
             currentUserId={session?.user?.id}
             apiFetch={apiFetch}
             reload={loadAll}
@@ -943,20 +910,6 @@ function RebanhoApp() {
             setBanner={setBanner}
           />
         )}
-        {tab === "maquinas" && (
-          <MaquinasTab
-            maquinas={maquinas}
-            clientes={maquinaClientes}
-            apontamentos={maquinaApontamentos}
-            abastecimentos={maquinaAbastecimentos}
-            manutencoes={maquinaManutencoes}
-            fazendas={fazendas}
-            profile={profile}
-            apiFetch={apiFetch}
-            reload={loadAll}
-            setBanner={setBanner}
-          />
-        )}
         {tab === "indicadores" && profile?.role === "administrador" && (
           <IndicadoresTab
             animals={animals}
@@ -986,6 +939,25 @@ function RebanhoApp() {
             setBanner={setBanner}
           />
         )}
+
+        <div
+          style={{
+            textAlign: "center",
+            marginTop: 32,
+            paddingTop: 16,
+            borderTop: "1px solid rgba(11,61,46,0.10)",
+            fontSize: 11,
+            color: "#6E7A61",
+            lineHeight: 1.7,
+          }}
+        >
+          Desenvolvido por Joseval da Silva Pereira
+          <br />
+          Suporte:{" "}
+          <a href="mailto:joseval.med3@gmail.com" style={{ color: "#6E7A61", textDecoration: "underline" }}>
+            joseval.med3@gmail.com
+          </a>
+        </div>
       </div>
       <SideDrawer
         open={showMenu}
@@ -1214,6 +1186,15 @@ function AuthScreen({ authMode, setAuthMode, authForm, setAuthForm, authLoading,
               </button>
             )}
           </div>
+        </div>
+
+        <div style={{ textAlign: "center", marginTop: 20, fontSize: 11, color: "#6E7A61", lineHeight: 1.7 }}>
+          Desenvolvido por Joseval da Silva Pereira
+          <br />
+          Suporte:{" "}
+          <a href="mailto:joseval.med3@gmail.com" style={{ color: "#6E7A61", textDecoration: "underline" }}>
+            joseval.med3@gmail.com
+          </a>
         </div>
       </div>
     </div>
@@ -1533,9 +1514,6 @@ function SideDrawer({ open, onClose, tab, setTab, profile, onLogout, alertCount 
   }
   items.push({ id: "saude", label: "Saúde", icon: Stethoscope });
   items.push({ id: "manejo", label: "Manejo", icon: Grid });
-  if (profile?.role === "administrador" || (profile?.acesso_maquinas || []).length > 0) {
-    items.push({ id: "maquinas", label: "Máquinas", icon: Wrench });
-  }
   items.push({ id: "relatorios", label: "Relatórios", icon: BarChart });
   if (profile?.role === "administrador") {
     items.push({ id: "financeiro", label: "Financeiro", icon: DollarSign });
@@ -6103,7 +6081,7 @@ function SettingsModal({ apiFetch, onClose, setBanner }) {
 }
 
 // ---------------- USUÁRIOS (apenas administradores) ----------------
-function UsuariosTab({ users, maquinas, currentUserId, apiFetch, reload, setBanner }) {
+function UsuariosTab({ users, currentUserId, apiFetch, reload, setBanner }) {
   const [savingId, setSavingId] = useState(null);
 
   const setRole = async (user, novoRole) => {
@@ -6198,22 +6176,6 @@ function UsuariosTab({ users, maquinas, currentUserId, apiFetch, reload, setBann
         method: "PATCH",
         headers: { Prefer: "return=minimal" },
         body: JSON.stringify({ acesso_rebanhos: novoAcesso }),
-      });
-      reload();
-    } catch (e) {
-      setBanner({ type: "error", text: "Erro ao atualizar acesso: " + e.message });
-    } finally {
-      setSavingId(null);
-    }
-  };
-
-  const setAcessoMaquinas = async (user, novoAcesso) => {
-    setSavingId(user.id);
-    try {
-      await apiFetch(`/rest/v1/profiles?id=eq.${user.id}`, {
-        method: "PATCH",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({ acesso_maquinas: novoAcesso }),
       });
       reload();
     } catch (e) {
@@ -6319,7 +6281,6 @@ function UsuariosTab({ users, maquinas, currentUserId, apiFetch, reload, setBann
           <UsuarioRow
             key={u.id}
             user={u}
-            maquinas={maquinas}
             isSelf={u.id === currentUserId}
             saving={savingId === u.id}
             roleLabel={roleLabel}
@@ -6327,7 +6288,6 @@ function UsuariosTab({ users, maquinas, currentUserId, apiFetch, reload, setBann
             onSetRole={setRole}
             onSetNome={setNome}
             onSetAcesso={setAcesso}
-            onSetAcessoMaquinas={setAcessoMaquinas}
             onExcluir={() => setAtivo(u, false)}
           />
         ))}
@@ -6398,7 +6358,7 @@ function UsuariosTab({ users, maquinas, currentUserId, apiFetch, reload, setBann
   );
 }
 
-function UsuarioRow({ user, maquinas, isSelf, saving, roleLabel, roleColor, onSetRole, onSetNome, onSetAcesso, onSetAcessoMaquinas, onExcluir }) {
+function UsuarioRow({ user, isSelf, saving, roleLabel, roleColor, onSetRole, onSetNome, onSetAcesso, onExcluir }) {
   const [editandoNome, setEditandoNome] = useState(false);
   const [nomeTemp, setNomeTemp] = useState(user.nome);
 
@@ -6411,12 +6371,6 @@ function UsuarioRow({ user, maquinas, isSelf, saving, roleLabel, roleColor, onSe
   const toggleAcesso = (f) => {
     const novo = acessos.includes(f) ? acessos.filter((x) => x !== f) : [...acessos, f];
     onSetAcesso(user, novo);
-  };
-
-  const acessosMaquinas = user.acesso_maquinas || [];
-  const toggleAcessoMaquina = (id) => {
-    const novo = acessosMaquinas.includes(id) ? acessosMaquinas.filter((x) => x !== id) : [...acessosMaquinas, id];
-    onSetAcessoMaquinas(user, novo);
   };
 
   return (
@@ -6480,114 +6434,27 @@ function UsuarioRow({ user, maquinas, isSelf, saving, roleLabel, roleColor, onSe
           <div style={{ fontSize: 10, color: "#6E7A61", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>
             Acesso aos rebanhos
           </div>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 2,
-              background: "#F5F2E9",
-              border: "1px solid rgba(11,61,46,0.14)",
-              borderRadius: 10,
-              padding: 4,
-            }}
-          >
-            {Object.entries(ACESSO_REBANHO_LABELS).map(([k, label]) => {
-              const marcado = acessos.includes(k);
-              const cor = ACESSO_REBANHO_COLORS[k];
-              return (
-                <label
-                  key={k}
-                  onClick={() => !saving && toggleAcesso(k)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "9px 10px",
-                    borderRadius: 7,
-                    background: marcado ? "#FFFFFF" : "transparent",
-                    cursor: saving ? "default" : "pointer",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 20,
-                      height: 20,
-                      flexShrink: 0,
-                      borderRadius: 5,
-                      border: "1.5px solid " + (marcado ? cor : "rgba(11,61,46,0.3)"),
-                      background: marcado ? cor : "#FFFFFF",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#FFFFFF",
-                      fontSize: 13,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {marcado ? "✓" : ""}
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: marcado ? 700 : 500, color: "#1F3324" }}>{label}</span>
-                </label>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {(user.role === "operador" || user.role === "visualizador") && maquinas && maquinas.length > 0 && (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 10, color: "#6E7A61", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>
-            Acesso às máquinas
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 2,
-              background: "#F5F2E9",
-              border: "1px solid rgba(11,61,46,0.14)",
-              borderRadius: 10,
-              padding: 4,
-            }}
-          >
-            {maquinas.map((m) => {
-              const marcado = acessosMaquinas.includes(m.id);
-              return (
-                <label
-                  key={m.id}
-                  onClick={() => !saving && toggleAcessoMaquina(m.id)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "9px 10px",
-                    borderRadius: 7,
-                    background: marcado ? "#FFFFFF" : "transparent",
-                    cursor: saving ? "default" : "pointer",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 20,
-                      height: 20,
-                      flexShrink: 0,
-                      borderRadius: 5,
-                      border: "1.5px solid " + (marcado ? "#5BAA47" : "rgba(11,61,46,0.3)"),
-                      background: marcado ? "#5BAA47" : "#FFFFFF",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#FFFFFF",
-                      fontSize: 13,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {marcado ? "✓" : ""}
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: marcado ? 700 : 500, color: "#1F3324" }}>{m.nome}</span>
-                </label>
-              );
-            })}
+          <div style={{ display: "flex", gap: 6 }}>
+            {Object.entries(ACESSO_REBANHO_LABELS).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => toggleAcesso(k)}
+                disabled={saving}
+                style={{
+                  flex: 1,
+                  padding: "7px 0",
+                  borderRadius: 8,
+                  border: "1px solid " + (acessos.includes(k) ? ACESSO_REBANHO_COLORS[k] : "rgba(11,61,46,0.18)"),
+                  background: acessos.includes(k) ? ACESSO_REBANHO_COLORS[k] + "22" : "transparent",
+                  color: acessos.includes(k) ? ACESSO_REBANHO_COLORS[k] : "#6E7A61",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: saving ? "default" : "pointer",
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -11372,1215 +11239,6 @@ function CicloLeiteSecao({ financeiro, entregas, production, apiFetch, reload, s
             </div>
           );
         })}
-      </div>
-    </div>
-  );
-}
-
-// ---------------- MÁQUINAS ----------------
-const TIPOS_MAQUINA = [
-  ["retroescavadeira", "Retroescavadeira"],
-  ["carreta", "Carreta"],
-  ["trator", "Trator"],
-  ["caminhao", "Caminhão"],
-  ["outro", "Outro"],
-];
-
-const MEDIDOR_TIPOS = [
-  ["horimetro", "Horímetro (h)"],
-  ["km", "Quilometragem (km)"],
-  ["nenhum", "Sem medidor"],
-];
-
-function medidorUnidade(medidor) {
-  if (medidor === "horimetro") return "h";
-  if (medidor === "km") return "km";
-  return "";
-}
-
-function SelectField({ label, value, onChange, options, placeholder }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span style={{ fontSize: 12, color: "#6E7A61", fontWeight: 600 }}>{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "10px 12px", color: "#1F3324", fontSize: 14 }}
-      >
-        {placeholder && <option value="">{placeholder}</option>}
-        {options.map(([id, label2]) => (
-          <option key={id} value={id}>
-            {label2}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function MaquinasTab({ maquinas, clientes, apontamentos, abastecimentos, manutencoes, fazendas, profile, apiFetch, reload, setBanner }) {
-  const isAdmin = profile?.role === "administrador";
-  const [subTab, setSubTab] = useState(isAdmin ? "geral" : "apontamentos");
-
-  const idsPermitidos = profile?.acesso_maquinas || [];
-  const maquinasPermitidas = isAdmin ? maquinas : maquinas.filter((m) => idsPermitidos.includes(m.id));
-  const idsVisiveis = new Set(maquinasPermitidas.map((m) => m.id));
-  const apontamentosPermitidos = isAdmin ? apontamentos : apontamentos.filter((a) => idsVisiveis.has(a.maquina_id));
-  const abastecimentosPermitidos = isAdmin ? abastecimentos : abastecimentos.filter((a) => idsVisiveis.has(a.maquina_id));
-  const manutencoesPermitidas = isAdmin ? manutencoes : manutencoes.filter((m) => idsVisiveis.has(m.maquina_id));
-
-  const btnStyle = (active) => ({
-    flex: 1,
-    background: active ? "#B8862E" : "#FFFFFF",
-    color: active ? "#F5F2E9" : "#1F3324",
-    border: "1px solid rgba(11,61,46,0.14)",
-    borderRadius: 8,
-    padding: "10px 0",
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  });
-
-  if (!isAdmin && maquinasPermitidas.length === 0) {
-    return <EmptyState text="Você ainda não tem nenhuma máquina liberada. Fale com o administrador." />;
-  }
-
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 18, overflowX: "auto" }}>
-        {isAdmin && (
-          <button onClick={() => setSubTab("geral")} style={btnStyle(subTab === "geral")}>
-            Visão geral
-          </button>
-        )}
-        <button onClick={() => setSubTab("apontamentos")} style={btnStyle(subTab === "apontamentos")}>
-          Horas
-        </button>
-        <button onClick={() => setSubTab("abastecimento")} style={btnStyle(subTab === "abastecimento")}>
-          Abastecimento
-        </button>
-        <button onClick={() => setSubTab("manutencao")} style={btnStyle(subTab === "manutencao")}>
-          Manutenção
-        </button>
-        {isAdmin && (
-          <button onClick={() => setSubTab("financeiro")} style={btnStyle(subTab === "financeiro")}>
-            Financeiro
-          </button>
-        )}
-        {isAdmin && (
-          <button onClick={() => setSubTab("relatorios")} style={btnStyle(subTab === "relatorios")}>
-            Relatórios
-          </button>
-        )}
-      </div>
-
-      {subTab === "geral" && isAdmin && <MaquinasGeralSecao maquinas={maquinas} apontamentos={apontamentos} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />}
-      {subTab === "apontamentos" && (
-        <MaquinaApontamentosSecao
-          maquinas={maquinasPermitidas}
-          clientes={clientes}
-          apontamentos={apontamentosPermitidos}
-          fazendas={fazendas}
-          isAdmin={isAdmin}
-          apiFetch={apiFetch}
-          reload={reload}
-          setBanner={setBanner}
-        />
-      )}
-      {subTab === "abastecimento" && (
-        <MaquinaAbastecimentoSecao maquinas={maquinasPermitidas} abastecimentos={abastecimentosPermitidos} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
-      )}
-      {subTab === "manutencao" && (
-        <MaquinaManutencaoSecao maquinas={maquinasPermitidas} manutencoes={manutencoesPermitidas} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
-      )}
-      {subTab === "financeiro" && isAdmin && (
-        <MaquinaFinanceiroSecao maquinas={maquinas} clientes={clientes} apontamentos={apontamentos} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
-      )}
-      {subTab === "relatorios" && isAdmin && (
-        <MaquinaRelatoriosSecao maquinas={maquinas} apontamentos={apontamentos} abastecimentos={abastecimentos} manutencoes={manutencoes} />
-      )}
-    </div>
-  );
-}
-
-function MaquinasGeralSecao({ maquinas, apontamentos, apiFetch, reload, setBanner }) {
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    nome: "",
-    tipo: "retroescavadeira",
-    marca_modelo: "",
-    ano: "",
-    medidor: "horimetro",
-    valor_compra: "",
-    data_compra: "",
-  });
-
-  const today = todayISO();
-  const monthPrefix = today.slice(0, 7);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!form.nome.trim()) {
-      setBanner({ type: "error", text: "Informe o nome da máquina." });
-      return;
-    }
-    setSaving(true);
-    try {
-      await apiFetch(`/rest/v1/maquinas`, {
-        method: "POST",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({
-          nome: form.nome.trim(),
-          tipo: form.tipo,
-          marca_modelo: form.marca_modelo || null,
-          ano: form.ano !== "" ? Number(form.ano) : null,
-          medidor: form.medidor,
-          medidor_atual: 0,
-          valor_compra: form.valor_compra !== "" ? Number(form.valor_compra) : null,
-          data_compra: form.data_compra || null,
-          status: "ativa",
-        }),
-      });
-      setBanner({ type: "success", text: "Máquina cadastrada." });
-      setForm({ nome: "", tipo: "retroescavadeira", marca_modelo: "", ano: "", medidor: "horimetro", valor_compra: "", data_compra: "" });
-      setShowForm(false);
-      reload();
-    } catch (err) {
-      setBanner({ type: "error", text: "Erro ao salvar: " + err.message });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const excluir = async (m) => {
-    if (!window.confirm(`Excluir a máquina "${m.nome}"? Isso não apaga os apontamentos já lançados.`)) return;
-    try {
-      await apiFetch(`/rest/v1/maquinas?id=eq.${m.id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
-      setBanner({ type: "success", text: "Máquina excluída." });
-      reload();
-    } catch (err) {
-      setBanner({ type: "error", text: "Erro ao excluir: " + err.message });
-    }
-  };
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <SectionTitle>Máquinas ({maquinas.length})</SectionTitle>
-        <IconButton onClick={() => setShowForm((v) => !v)} active={showForm} />
-      </div>
-
-      {showForm && (
-        <form onSubmit={submit} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 14, padding: 18, marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
-          <Field label="Nome" value={form.nome} onChange={(v) => setForm({ ...form, nome: v })} placeholder="Ex: Retroescavadeira JCB" required />
-          <SelectField label="Tipo" value={form.tipo} onChange={(v) => setForm({ ...form, tipo: v })} options={TIPOS_MAQUINA} />
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <Field label="Marca / modelo" value={form.marca_modelo} onChange={(v) => setForm({ ...form, marca_modelo: v })} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <Field label="Ano" type="number" value={form.ano} onChange={(v) => setForm({ ...form, ano: v })} />
-            </div>
-          </div>
-          <SelectField label="Medidor" value={form.medidor} onChange={(v) => setForm({ ...form, medidor: v })} options={MEDIDOR_TIPOS} />
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <Field label="Valor de compra (R$)" type="number" value={form.valor_compra} onChange={(v) => setForm({ ...form, valor_compra: v })} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <Field label="Data de compra" type="date" value={form.data_compra} onChange={(v) => setForm({ ...form, data_compra: v })} />
-            </div>
-          </div>
-          <SaveButton saving={saving} />
-        </form>
-      )}
-
-      <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-        {maquinas.length === 0 && <EmptyState text="Nenhuma máquina cadastrada ainda." />}
-        {maquinas.map((m) => {
-          const apMaquina = apontamentos.filter((a) => a.maquina_id === m.id);
-          const apMes = apMaquina.filter((a) => (a.data || "").startsWith(monthPrefix));
-          const horasMes = apMes.reduce((s, a) => s + Number(a.horas || 0), 0);
-          const receitaMes = apMes.filter((a) => a.destino === "cliente").reduce((s, a) => s + Number(a.valor_total || 0), 0);
-          const unidade = medidorUnidade(m.medidor);
-          return (
-            <div key={m.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 14, padding: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{m.nome}</div>
-                  <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 2 }}>
-                    {[TIPOS_MAQUINA.find((t) => t[0] === m.tipo) ? TIPOS_MAQUINA.find((t) => t[0] === m.tipo)[1] : null, m.marca_modelo, m.ano]
-                      .filter(Boolean)
-                      .join(" • ")}
-                  </div>
-                </div>
-                <button
-                  onClick={() => excluir(m)}
-                  style={{ background: "rgba(196,100,75,0.15)", border: "1px solid #B5453A", borderRadius: 8, padding: "6px 10px", color: "#A83B2E", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                >
-                  Excluir
-                </button>
-              </div>
-              <div style={{ display: "flex", gap: 18, marginTop: 12, flexWrap: "wrap" }}>
-                {unidade && (
-                  <div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: "#3E7C99" }}>
-                      {Number(m.medidor_atual || 0).toFixed(1)} {unidade}
-                    </div>
-                    <div style={{ fontSize: 11, color: "#6E7A61" }}>Medidor atual</div>
-                  </div>
-                )}
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "#B8862E" }}>{horasMes.toFixed(1)} h</div>
-                  <div style={{ fontSize: 11, color: "#6E7A61" }}>Trabalhadas no mês</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "#5BAA47" }}>R$ {receitaMes.toFixed(2)}</div>
-                  <div style={{ fontSize: 11, color: "#6E7A61" }}>Receita no mês</div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function MaquinaApontamentosSecao({ maquinas, clientes, apontamentos, fazendas, isAdmin, apiFetch, reload, setBanner }) {
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [jaPago, setJaPago] = useState(false);
-  const [showNovoCliente, setShowNovoCliente] = useState(false);
-  const [novoCliente, setNovoCliente] = useState("");
-  const [filtroMaquina, setFiltroMaquina] = useState("");
-  const [filtroDestino, setFiltroDestino] = useState("");
-
-  const blankForm = {
-    maquina_id: "",
-    data: todayISO(),
-    destino: isAdmin ? "cliente" : "interno",
-    cliente_id: "",
-    fazenda_id: "",
-    medidor_inicio: "",
-    medidor_fim: "",
-    horas: "",
-    tipo_servico: "",
-    valor_hora: "",
-    valor_total: "",
-    operador: "",
-    observacoes: "",
-  };
-  const [form, setForm] = useState(blankForm);
-
-  const maquinaSelecionada = maquinas.find((m) => m.id === form.maquina_id);
-  const temMedidor = maquinaSelecionada && maquinaSelecionada.medidor !== "nenhum";
-  const destino = isAdmin ? form.destino : "interno";
-
-  useEffect(() => {
-    if (temMedidor && form.medidor_inicio !== "" && form.medidor_fim !== "") {
-      const h = Number(form.medidor_fim) - Number(form.medidor_inicio);
-      if (h >= 0 && String(h) !== form.horas) setForm((f) => ({ ...f, horas: String(h) }));
-    }
-  }, [form.medidor_inicio, form.medidor_fim]);
-
-  useEffect(() => {
-    if (form.horas !== "" && form.valor_hora !== "") {
-      const total = Number(form.horas) * Number(form.valor_hora);
-      if (!isNaN(total)) setForm((f) => ({ ...f, valor_total: total.toFixed(2) }));
-    }
-  }, [form.horas, form.valor_hora]);
-
-  const handleMaquinaChange = (id) => {
-    const m = maquinas.find((mm) => mm.id === id);
-    setForm((f) => ({
-      ...f,
-      maquina_id: id,
-      medidor_inicio: m && m.medidor !== "nenhum" ? String(m.medidor_atual || 0) : "",
-      medidor_fim: "",
-      horas: "",
-    }));
-  };
-
-  const criarClienteRapido = async () => {
-    if (!novoCliente.trim()) return;
-    try {
-      const rows = await apiFetch(`/rest/v1/maquina_clientes`, {
-        method: "POST",
-        headers: { Prefer: "return=representation" },
-        body: JSON.stringify({ nome: novoCliente.trim() }),
-      });
-      const criado = rows && rows[0];
-      setNovoCliente("");
-      setShowNovoCliente(false);
-      reload();
-      if (criado) setForm((f) => ({ ...f, cliente_id: criado.id }));
-    } catch (err) {
-      setBanner({ type: "error", text: "Erro ao cadastrar cliente: " + err.message });
-    }
-  };
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!form.maquina_id) {
-      setBanner({ type: "error", text: "Selecione a máquina." });
-      return;
-    }
-    if (destino === "cliente" && !form.cliente_id) {
-      setBanner({ type: "error", text: "Selecione o cliente." });
-      return;
-    }
-    if (destino === "interno" && !form.fazenda_id) {
-      setBanner({ type: "error", text: "Selecione a fazenda." });
-      return;
-    }
-    setSaving(true);
-    try {
-      await apiFetch(`/rest/v1/maquina_apontamentos`, {
-        method: "POST",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({
-          maquina_id: form.maquina_id,
-          data: form.data,
-          destino: destino,
-          cliente_id: destino === "cliente" ? form.cliente_id : null,
-          fazenda_id: destino === "interno" ? form.fazenda_id : null,
-          medidor_inicio: form.medidor_inicio !== "" ? Number(form.medidor_inicio) : null,
-          medidor_fim: form.medidor_fim !== "" ? Number(form.medidor_fim) : null,
-          horas: form.horas !== "" ? Number(form.horas) : null,
-          tipo_servico: form.tipo_servico || null,
-          valor_hora: isAdmin && form.valor_hora !== "" ? Number(form.valor_hora) : null,
-          valor_total: isAdmin && form.valor_total !== "" ? Number(form.valor_total) : null,
-          status_pagamento: destino === "interno" ? "interno" : jaPago ? "pago" : "pendente",
-          data_pagamento: destino === "cliente" && jaPago ? todayISO() : null,
-          operador: form.operador || null,
-          observacoes: form.observacoes || null,
-        }),
-      });
-      if (form.medidor_fim !== "" && maquinaSelecionada) {
-        await apiFetch(`/rest/v1/maquinas?id=eq.${form.maquina_id}`, {
-          method: "PATCH",
-          headers: { Prefer: "return=minimal" },
-          body: JSON.stringify({ medidor_atual: Number(form.medidor_fim) }),
-        });
-      }
-      setBanner({ type: "success", text: "Trabalho lançado." });
-      setForm(blankForm);
-      setJaPago(false);
-      setShowForm(false);
-      reload();
-    } catch (err) {
-      setBanner({ type: "error", text: "Erro ao salvar: " + err.message });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const excluir = async (a) => {
-    if (!window.confirm("Excluir este apontamento?")) return;
-    try {
-      await apiFetch(`/rest/v1/maquina_apontamentos?id=eq.${a.id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
-      setBanner({ type: "success", text: "Apontamento excluído." });
-      reload();
-    } catch (err) {
-      setBanner({ type: "error", text: "Erro ao excluir: " + err.message });
-    }
-  };
-
-  const destinoBtnStyle = (active) => ({
-    flex: 1,
-    background: active ? "#5BAA47" : "#F5F2E9",
-    color: active ? "#F5F2E9" : "#6E7A61",
-    border: "1px solid rgba(11,61,46,0.14)",
-    borderRadius: 8,
-    padding: "9px 0",
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: "pointer",
-  });
-
-  const listaFiltrada = apontamentos.filter((a) => !filtroMaquina || a.maquina_id === filtroMaquina).filter((a) => !filtroDestino || a.destino === filtroDestino);
-
-  const statusColor = (s) => (s === "pago" ? "#5BAA47" : s === "interno" ? "#6E7A61" : "#B8862E");
-  const statusLabel = (s) => (s === "pago" ? "Pago" : s === "interno" ? "Interno" : "Pendente");
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <SectionTitle>Apontamentos</SectionTitle>
-        <IconButton onClick={() => setShowForm((v) => !v)} active={showForm} />
-      </div>
-
-      {showForm && (
-        <form onSubmit={submit} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 14, padding: 18, marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
-          <SelectField label="Máquina" value={form.maquina_id} onChange={handleMaquinaChange} options={maquinas.map((m) => [m.id, m.nome])} placeholder="Selecione a máquina" />
-          <Field label="Data" type="date" value={form.data} onChange={(v) => setForm({ ...form, data: v })} required />
-
-          {isAdmin && (
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={() => setForm({ ...form, destino: "cliente" })} style={destinoBtnStyle(form.destino === "cliente")}>
-                Cliente
-              </button>
-              <button type="button" onClick={() => setForm({ ...form, destino: "interno" })} style={destinoBtnStyle(form.destino === "interno")}>
-                Interno
-              </button>
-            </div>
-          )}
-
-          {destino === "cliente" && (
-            <div>
-              <SelectField label="Cliente" value={form.cliente_id} onChange={(v) => setForm({ ...form, cliente_id: v })} options={clientes.map((c) => [c.id, c.nome])} placeholder="Selecione o cliente" />
-              {!showNovoCliente ? (
-                <button type="button" onClick={() => setShowNovoCliente(true)} style={{ background: "none", border: "none", color: "#B8862E", fontSize: 12, fontWeight: 700, cursor: "pointer", marginTop: 6, padding: 0 }}>
-                  + Novo cliente
-                </button>
-              ) : (
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                  <input
-                    value={novoCliente}
-                    onChange={(e) => setNovoCliente(e.target.value)}
-                    placeholder="Nome do cliente"
-                    style={{ flex: 1, background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "9px 12px", color: "#1F3324", fontSize: 13 }}
-                  />
-                  <button type="button" onClick={criarClienteRapido} style={{ background: "#B8862E", border: "none", borderRadius: 8, padding: "0 14px", color: "#F5F2E9", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                    Salvar
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {destino === "interno" && (
-            <SelectField label="Fazenda" value={form.fazenda_id} onChange={(v) => setForm({ ...form, fazenda_id: v })} options={fazendas.map((f) => [f.id, f.nome])} placeholder="Selecione a fazenda" />
-          )}
-
-          {temMedidor && (
-            <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <Field label={`Medidor início (${medidorUnidade(maquinaSelecionada.medidor)})`} type="number" value={form.medidor_inicio} onChange={(v) => setForm({ ...form, medidor_inicio: v })} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <Field label={`Medidor fim (${medidorUnidade(maquinaSelecionada.medidor)})`} type="number" value={form.medidor_fim} onChange={(v) => setForm({ ...form, medidor_fim: v })} />
-              </div>
-            </div>
-          )}
-
-          <Field label={temMedidor ? "Horas (calculado, pode ajustar)" : "Horas (opcional)"} type="number" value={form.horas} onChange={(v) => setForm({ ...form, horas: v })} />
-          <Field label="Tipo de serviço" value={form.tipo_servico} onChange={(v) => setForm({ ...form, tipo_servico: v })} placeholder="Ex: limpeza de tanque, frete de silagem" />
-
-          {isAdmin && (
-            <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <Field label="Valor/hora (R$)" type="number" value={form.valor_hora} onChange={(v) => setForm({ ...form, valor_hora: v })} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <Field label="Valor total (R$)" type="number" value={form.valor_total} onChange={(v) => setForm({ ...form, valor_total: v })} />
-              </div>
-            </div>
-          )}
-
-          {destino === "cliente" && (
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#1F3324" }}>
-              <input type="checkbox" checked={jaPago} onChange={(e) => setJaPago(e.target.checked)} />
-              Já foi pago
-            </label>
-          )}
-
-          <Field label="Operador (opcional)" value={form.operador} onChange={(v) => setForm({ ...form, operador: v })} />
-          <Field label="Observações" value={form.observacoes} onChange={(v) => setForm({ ...form, observacoes: v })} />
-          <SaveButton saving={saving} />
-        </form>
-      )}
-
-      <div style={{ display: "flex", gap: 8, marginTop: 16, overflowX: "auto" }}>
-        <select
-          value={filtroMaquina}
-          onChange={(e) => setFiltroMaquina(e.target.value)}
-          style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "8px 10px", color: "#1F3324", fontSize: 12 }}
-        >
-          <option value="">Todas as máquinas</option>
-          {maquinas.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.nome}
-            </option>
-          ))}
-        </select>
-        <select
-          value={filtroDestino}
-          onChange={(e) => setFiltroDestino(e.target.value)}
-          style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "8px 10px", color: "#1F3324", fontSize: 12 }}
-        >
-          <option value="">Todos</option>
-          <option value="cliente">Cliente</option>
-          <option value="interno">Interno</option>
-        </select>
-      </div>
-
-      <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-        {listaFiltrada.length === 0 && <EmptyState text="Nenhum apontamento lançado ainda." />}
-        {listaFiltrada.map((a) => {
-          const m = maquinas.find((mm) => mm.id === a.maquina_id);
-          const c = clientes.find((cc) => cc.id === a.cliente_id);
-          const f = fazendas.find((ff) => ff.id === a.fazenda_id);
-          return (
-            <div key={a.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>
-                    {m ? m.nome : "Máquina"} — {formatDataBR(a.data)}
-                  </div>
-                  <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 2 }}>
-                    {a.destino === "cliente" ? (c ? c.nome : "Cliente") : f ? f.nome : "Interno"}
-                    {a.tipo_servico ? ` • ${a.tipo_servico}` : ""}
-                    {a.horas ? ` • ${Number(a.horas).toFixed(1)} h` : ""}
-                  </div>
-                </div>
-                <Badge color={statusColor(a.status_pagamento)}>{statusLabel(a.status_pagamento)}</Badge>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#1F3324" }}>{a.valor_total ? `R$ ${Number(a.valor_total).toFixed(2)}` : "—"}</div>
-                <button
-                  onClick={() => excluir(a)}
-                  style={{ background: "rgba(196,100,75,0.15)", border: "1px solid #B5453A", borderRadius: 8, padding: "5px 10px", color: "#A83B2E", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
-                >
-                  Excluir
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function MaquinaAbastecimentoSecao({ maquinas, abastecimentos, apiFetch, reload, setBanner }) {
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [filtroMaquina, setFiltroMaquina] = useState("");
-  const blankForm = { maquina_id: "", data: todayISO(), litros: "", valor_litro: "", valor_total: "", medidor: "", origem: "", observacoes: "" };
-  const [form, setForm] = useState(blankForm);
-
-  const maquinaSelecionada = maquinas.find((m) => m.id === form.maquina_id);
-  const temMedidor = maquinaSelecionada && maquinaSelecionada.medidor !== "nenhum";
-
-  useEffect(() => {
-    if (form.litros !== "" && form.valor_litro !== "") {
-      const total = Number(form.litros) * Number(form.valor_litro);
-      if (!isNaN(total)) setForm((f) => ({ ...f, valor_total: total.toFixed(2) }));
-    }
-  }, [form.litros, form.valor_litro]);
-
-  const handleMaquinaChange = (id) => {
-    const m = maquinas.find((mm) => mm.id === id);
-    setForm((f) => ({ ...f, maquina_id: id, medidor: m && m.medidor !== "nenhum" ? String(m.medidor_atual || 0) : "" }));
-  };
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!form.maquina_id) {
-      setBanner({ type: "error", text: "Selecione a máquina." });
-      return;
-    }
-    if (!form.litros || Number(form.litros) <= 0) {
-      setBanner({ type: "error", text: "Informe os litros abastecidos." });
-      return;
-    }
-    setSaving(true);
-    try {
-      await apiFetch(`/rest/v1/maquina_abastecimentos`, {
-        method: "POST",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({
-          maquina_id: form.maquina_id,
-          data: form.data,
-          litros: Number(form.litros),
-          valor_litro: form.valor_litro !== "" ? Number(form.valor_litro) : null,
-          valor_total: form.valor_total !== "" ? Number(form.valor_total) : null,
-          medidor: form.medidor !== "" ? Number(form.medidor) : null,
-          origem: form.origem || null,
-          observacoes: form.observacoes || null,
-        }),
-      });
-      if (form.medidor !== "" && maquinaSelecionada && Number(form.medidor) > Number(maquinaSelecionada.medidor_atual || 0)) {
-        await apiFetch(`/rest/v1/maquinas?id=eq.${form.maquina_id}`, {
-          method: "PATCH",
-          headers: { Prefer: "return=minimal" },
-          body: JSON.stringify({ medidor_atual: Number(form.medidor) }),
-        });
-      }
-      setBanner({ type: "success", text: "Abastecimento lançado." });
-      setForm(blankForm);
-      setShowForm(false);
-      reload();
-    } catch (err) {
-      setBanner({ type: "error", text: "Erro ao salvar: " + err.message });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const excluir = async (a) => {
-    if (!window.confirm("Excluir este abastecimento?")) return;
-    try {
-      await apiFetch(`/rest/v1/maquina_abastecimentos?id=eq.${a.id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
-      setBanner({ type: "success", text: "Abastecimento excluído." });
-      reload();
-    } catch (err) {
-      setBanner({ type: "error", text: "Erro ao excluir: " + err.message });
-    }
-  };
-
-  const today = todayISO();
-  const monthPrefix = today.slice(0, 7);
-  const doMes = abastecimentos.filter((a) => (a.data || "").startsWith(monthPrefix));
-  const litrosMes = doMes.reduce((s, a) => s + Number(a.litros || 0), 0);
-  const gastoMes = doMes.reduce((s, a) => s + Number(a.valor_total || 0), 0);
-
-  const listaFiltrada = abastecimentos.filter((a) => !filtroMaquina || a.maquina_id === filtroMaquina);
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <SectionTitle>Abastecimento</SectionTitle>
-        <IconButton onClick={() => setShowForm((v) => !v)} active={showForm} />
-      </div>
-
-      <div style={{ display: "flex", gap: 12, marginTop: 14 }}>
-        <div style={{ flex: 1, background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 14px" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#3E7C99" }}>{litrosMes.toFixed(1)} L</div>
-          <div style={{ fontSize: 11, color: "#6E7A61" }}>Abastecido no mês</div>
-        </div>
-        <div style={{ flex: 1, background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 14px" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#B8862E" }}>R$ {gastoMes.toFixed(2)}</div>
-          <div style={{ fontSize: 11, color: "#6E7A61" }}>Gasto com diesel no mês</div>
-        </div>
-      </div>
-
-      {showForm && (
-        <form onSubmit={submit} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 14, padding: 18, marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
-          <SelectField label="Máquina" value={form.maquina_id} onChange={handleMaquinaChange} options={maquinas.map((m) => [m.id, m.nome])} placeholder="Selecione a máquina" />
-          <Field label="Data" type="date" value={form.data} onChange={(v) => setForm({ ...form, data: v })} required />
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <Field label="Litros" type="number" value={form.litros} onChange={(v) => setForm({ ...form, litros: v })} required />
-            </div>
-            <div style={{ flex: 1 }}>
-              <Field label="Valor/litro (R$)" type="number" value={form.valor_litro} onChange={(v) => setForm({ ...form, valor_litro: v })} />
-            </div>
-          </div>
-          <Field label="Valor total (R$)" type="number" value={form.valor_total} onChange={(v) => setForm({ ...form, valor_total: v })} />
-          {temMedidor && (
-            <Field label={`Medidor no momento (${medidorUnidade(maquinaSelecionada.medidor)})`} type="number" value={form.medidor} onChange={(v) => setForm({ ...form, medidor: v })} />
-          )}
-          <Field label="Origem" value={form.origem} onChange={(v) => setForm({ ...form, origem: v })} placeholder="Ex: posto, tanque da fazenda" />
-          <Field label="Observações" value={form.observacoes} onChange={(v) => setForm({ ...form, observacoes: v })} />
-          <SaveButton saving={saving} />
-        </form>
-      )}
-
-      <div style={{ marginTop: 16 }}>
-        <select
-          value={filtroMaquina}
-          onChange={(e) => setFiltroMaquina(e.target.value)}
-          style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "8px 10px", color: "#1F3324", fontSize: 12 }}
-        >
-          <option value="">Todas as máquinas</option>
-          {maquinas.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.nome}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-        {listaFiltrada.length === 0 && <EmptyState text="Nenhum abastecimento lançado ainda." />}
-        {listaFiltrada.map((a) => {
-          const m = maquinas.find((mm) => mm.id === a.maquina_id);
-          return (
-            <div key={a.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>
-                  {m ? m.nome : "Máquina"} — {formatDataBR(a.data)}
-                </div>
-                <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 2 }}>
-                  {Number(a.litros).toFixed(1)} L{a.valor_total ? ` • R$ ${Number(a.valor_total).toFixed(2)}` : ""}
-                  {a.origem ? ` • ${a.origem}` : ""}
-                </div>
-              </div>
-              <button
-                onClick={() => excluir(a)}
-                style={{ background: "rgba(196,100,75,0.15)", border: "1px solid #B5453A", borderRadius: 8, padding: "6px 10px", color: "#A83B2E", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-              >
-                Excluir
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-const TIPOS_MANUTENCAO = [
-  ["preventiva", "Preventiva"],
-  ["corretiva", "Corretiva"],
-];
-
-function MaquinaManutencaoSecao({ maquinas, manutencoes, apiFetch, reload, setBanner }) {
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [filtroMaquina, setFiltroMaquina] = useState("");
-  const blankForm = {
-    maquina_id: "",
-    data: todayISO(),
-    tipo: "preventiva",
-    descricao: "",
-    custo_pecas: "",
-    custo_mao_obra: "",
-    medidor: "",
-    proxima_em: "",
-    observacoes: "",
-  };
-  const [form, setForm] = useState(blankForm);
-
-  const maquinaSelecionada = maquinas.find((m) => m.id === form.maquina_id);
-  const temMedidor = maquinaSelecionada && maquinaSelecionada.medidor !== "nenhum";
-
-  const handleMaquinaChange = (id) => {
-    const m = maquinas.find((mm) => mm.id === id);
-    setForm((f) => ({ ...f, maquina_id: id, medidor: m && m.medidor !== "nenhum" ? String(m.medidor_atual || 0) : "" }));
-  };
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!form.maquina_id) {
-      setBanner({ type: "error", text: "Selecione a máquina." });
-      return;
-    }
-    if (!form.descricao.trim()) {
-      setBanner({ type: "error", text: "Descreva a manutenção." });
-      return;
-    }
-    setSaving(true);
-    try {
-      await apiFetch(`/rest/v1/maquina_manutencoes`, {
-        method: "POST",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({
-          maquina_id: form.maquina_id,
-          data: form.data,
-          tipo: form.tipo,
-          descricao: form.descricao.trim(),
-          custo_pecas: form.custo_pecas !== "" ? Number(form.custo_pecas) : null,
-          custo_mao_obra: form.custo_mao_obra !== "" ? Number(form.custo_mao_obra) : null,
-          medidor: form.medidor !== "" ? Number(form.medidor) : null,
-          proxima_em: form.proxima_em !== "" ? Number(form.proxima_em) : null,
-          observacoes: form.observacoes || null,
-        }),
-      });
-      setBanner({ type: "success", text: "Manutenção registrada." });
-      setForm(blankForm);
-      setShowForm(false);
-      reload();
-    } catch (err) {
-      setBanner({ type: "error", text: "Erro ao salvar: " + err.message });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const excluir = async (m) => {
-    if (!window.confirm("Excluir este registro de manutenção?")) return;
-    try {
-      await apiFetch(`/rest/v1/maquina_manutencoes?id=eq.${m.id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
-      setBanner({ type: "success", text: "Registro excluído." });
-      reload();
-    } catch (err) {
-      setBanner({ type: "error", text: "Erro ao excluir: " + err.message });
-    }
-  };
-
-  const tipoBtnStyle = (active) => ({
-    flex: 1,
-    background: active ? "#5BAA47" : "#F5F2E9",
-    color: active ? "#F5F2E9" : "#6E7A61",
-    border: "1px solid rgba(11,61,46,0.14)",
-    borderRadius: 8,
-    padding: "9px 0",
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: "pointer",
-  });
-
-  const listaFiltrada = manutencoes.filter((m) => !filtroMaquina || m.maquina_id === filtroMaquina);
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <SectionTitle>Manutenção</SectionTitle>
-        <IconButton onClick={() => setShowForm((v) => !v)} active={showForm} />
-      </div>
-
-      {showForm && (
-        <form onSubmit={submit} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 14, padding: 18, marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
-          <SelectField label="Máquina" value={form.maquina_id} onChange={handleMaquinaChange} options={maquinas.map((m) => [m.id, m.nome])} placeholder="Selecione a máquina" />
-          <Field label="Data" type="date" value={form.data} onChange={(v) => setForm({ ...form, data: v })} required />
-          <div style={{ display: "flex", gap: 8 }}>
-            {TIPOS_MANUTENCAO.map(([id, label]) => (
-              <button key={id} type="button" onClick={() => setForm({ ...form, tipo: id })} style={tipoBtnStyle(form.tipo === id)}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <Field label="Descrição" value={form.descricao} onChange={(v) => setForm({ ...form, descricao: v })} placeholder="Ex: troca de óleo e filtros" required />
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <Field label="Custo de peças (R$)" type="number" value={form.custo_pecas} onChange={(v) => setForm({ ...form, custo_pecas: v })} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <Field label="Custo de mão de obra (R$)" type="number" value={form.custo_mao_obra} onChange={(v) => setForm({ ...form, custo_mao_obra: v })} />
-            </div>
-          </div>
-          {temMedidor && (
-            <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <Field label={`Medidor no momento (${medidorUnidade(maquinaSelecionada.medidor)})`} type="number" value={form.medidor} onChange={(v) => setForm({ ...form, medidor: v })} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <Field label="Próxima revisão em" type="number" value={form.proxima_em} onChange={(v) => setForm({ ...form, proxima_em: v })} />
-              </div>
-            </div>
-          )}
-          <Field label="Observações" value={form.observacoes} onChange={(v) => setForm({ ...form, observacoes: v })} />
-          <SaveButton saving={saving} />
-        </form>
-      )}
-
-      <div style={{ marginTop: 16 }}>
-        <select
-          value={filtroMaquina}
-          onChange={(e) => setFiltroMaquina(e.target.value)}
-          style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "8px 10px", color: "#1F3324", fontSize: 12 }}
-        >
-          <option value="">Todas as máquinas</option>
-          {maquinas.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.nome}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-        {listaFiltrada.length === 0 && <EmptyState text="Nenhuma manutenção registrada ainda." />}
-        {listaFiltrada.map((m) => {
-          const maq = maquinas.find((mm) => mm.id === m.maquina_id);
-          const custoTotal = Number(m.custo_pecas || 0) + Number(m.custo_mao_obra || 0);
-          const vencida = m.proxima_em && maq && Number(maq.medidor_atual || 0) >= Number(m.proxima_em);
-          return (
-            <div key={m.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>
-                    {maq ? maq.nome : "Máquina"} — {formatDataBR(m.data)}
-                  </div>
-                  <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 2 }}>{m.descricao}</div>
-                </div>
-                <Badge color={m.tipo === "preventiva" ? "#5BAA47" : "#B5453A"}>{m.tipo === "preventiva" ? "Preventiva" : "Corretiva"}</Badge>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#1F3324" }}>{custoTotal > 0 ? `R$ ${custoTotal.toFixed(2)}` : "—"}</div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  {vencida && <Badge color="#B5453A">Próxima revisão vencida</Badge>}
-                  <button
-                    onClick={() => excluir(m)}
-                    style={{ background: "rgba(196,100,75,0.15)", border: "1px solid #B5453A", borderRadius: 8, padding: "5px 10px", color: "#A83B2E", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
-                  >
-                    Excluir
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function MaquinaRelatoriosSecao({ maquinas, apontamentos, abastecimentos, manutencoes }) {
-  const [periodo, setPeriodo] = useState(todayISO().slice(0, 7));
-
-  const noPeriodo = (data) => (data || "").startsWith(periodo);
-
-  const apMes = apontamentos.filter((a) => noPeriodo(a.data));
-  const abMes = abastecimentos.filter((a) => noPeriodo(a.data));
-  const manMes = manutencoes.filter((m) => noPeriodo(m.data));
-
-  const linhas = maquinas.map((m) => {
-    const ap = apMes.filter((a) => a.maquina_id === m.id);
-    const ab = abMes.filter((a) => a.maquina_id === m.id);
-    const man = manMes.filter((mm) => mm.maquina_id === m.id);
-
-    const horas = ap.reduce((s, a) => s + Number(a.horas || 0), 0);
-    const receita = ap.filter((a) => a.destino === "cliente").reduce((s, a) => s + Number(a.valor_total || 0), 0);
-    const litros = ab.reduce((s, a) => s + Number(a.litros || 0), 0);
-    const gastoDiesel = ab.reduce((s, a) => s + Number(a.valor_total || 0), 0);
-    const custoManutencao = man.reduce((s, mm) => s + Number(mm.custo_pecas || 0) + Number(mm.custo_mao_obra || 0), 0);
-    const custoTotal = gastoDiesel + custoManutencao;
-    const resultado = receita - custoTotal;
-    const custoHora = horas > 0 ? custoTotal / horas : null;
-
-    return { maquina: m, horas, receita, litros, gastoDiesel, custoManutencao, custoTotal, resultado };
-  });
-
-  const porOperador = {};
-  apMes.forEach((a) => {
-    const op = a.operador && a.operador.trim() ? a.operador.trim() : "Não informado";
-    porOperador[op] = (porOperador[op] || 0) + Number(a.horas || 0);
-  });
-
-  const totais = linhas.reduce(
-    (acc, l) => ({
-      horas: acc.horas + l.horas,
-      receita: acc.receita + l.receita,
-      gastoDiesel: acc.gastoDiesel + l.gastoDiesel,
-      custoManutencao: acc.custoManutencao + l.custoManutencao,
-      resultado: acc.resultado + l.resultado,
-    }),
-    { horas: 0, receita: 0, gastoDiesel: 0, custoManutencao: 0, resultado: 0 }
-  );
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-        <SectionTitle>Relatórios</SectionTitle>
-        <input
-          type="month"
-          value={periodo}
-          onChange={(e) => setPeriodo(e.target.value)}
-          style={{ background: "#F5F2E9", border: "1px solid rgba(11,61,46,0.14)", borderRadius: 8, padding: "8px 10px", color: "#1F3324", fontSize: 13 }}
-        />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
-        <div style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 14px" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#B8862E" }}>{totais.horas.toFixed(1)} h</div>
-          <div style={{ fontSize: 11, color: "#6E7A61" }}>Horas trabalhadas</div>
-        </div>
-        <div style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 14px" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#5BAA47" }}>R$ {totais.receita.toFixed(2)}</div>
-          <div style={{ fontSize: 11, color: "#6E7A61" }}>Receita de clientes</div>
-        </div>
-        <div style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 14px" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#3E7C99" }}>R$ {(totais.gastoDiesel + totais.custoManutencao).toFixed(2)}</div>
-          <div style={{ fontSize: 11, color: "#6E7A61" }}>Custo total (diesel + manutenção)</div>
-        </div>
-        <div style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 14px" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: totais.resultado >= 0 ? "#5BAA47" : "#B5453A" }}>R$ {totais.resultado.toFixed(2)}</div>
-          <div style={{ fontSize: 11, color: "#6E7A61" }}>Resultado do mês</div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: 20 }}>
-        <div style={{ fontSize: 12, color: "#6E7A61", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Por máquina</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {linhas.length === 0 && <EmptyState text="Nenhuma máquina cadastrada." />}
-          {linhas.map((l) => (
-            <div key={l.maquina.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: 14 }}>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{l.maquina.nome}</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: 8, fontSize: 12, color: "#6E7A61" }}>
-                <span>{l.horas.toFixed(1)} h trabalhadas</span>
-                <span>R$ {l.receita.toFixed(2)} receita</span>
-                <span>{l.litros.toFixed(1)} L diesel</span>
-                <span>R$ {l.custoManutencao.toFixed(2)} manutenção</span>
-                {l.horas > 0 && <span>R$ {(l.custoTotal / l.horas).toFixed(2)}/h de custo</span>}
-              </div>
-              <div style={{ marginTop: 6, fontSize: 14, fontWeight: 700, color: l.resultado >= 0 ? "#5BAA47" : "#B5453A" }}>
-                Resultado: R$ {l.resultado.toFixed(2)}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ marginTop: 20 }}>
-        <div style={{ fontSize: 12, color: "#6E7A61", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Horas por operador</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {Object.keys(porOperador).length === 0 && <EmptyState text="Nenhum apontamento no período." />}
-          {Object.entries(porOperador)
-            .sort((a, b) => b[1] - a[1])
-            .map(([op, horas]) => (
-              <div key={op} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{op}</span>
-                <span style={{ fontSize: 13, color: "#B8862E", fontWeight: 700 }}>{horas.toFixed(1)} h</span>
-              </div>
-            ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MaquinaFinanceiroSecao({ maquinas, clientes, apontamentos, apiFetch, reload, setBanner }) {
-  const recebiveis = apontamentos.filter((a) => a.destino === "cliente");
-  const porCliente = {};
-  recebiveis.forEach((a) => {
-    const cid = a.cliente_id || "sem-cliente";
-    if (!porCliente[cid]) porCliente[cid] = { pendente: 0, pago: 0, itens: [] };
-    porCliente[cid].itens.push(a);
-    if (a.status_pagamento === "pago") porCliente[cid].pago += Number(a.valor_total || 0);
-    else porCliente[cid].pendente += Number(a.valor_total || 0);
-  });
-
-  const totalPendente = recebiveis.filter((a) => a.status_pagamento === "pendente").reduce((s, a) => s + Number(a.valor_total || 0), 0);
-
-  const marcarPago = async (a) => {
-    try {
-      await apiFetch(`/rest/v1/maquina_apontamentos?id=eq.${a.id}`, {
-        method: "PATCH",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({ status_pagamento: "pago", data_pagamento: todayISO() }),
-      });
-      setBanner({ type: "success", text: "Marcado como pago." });
-      reload();
-    } catch (err) {
-      setBanner({ type: "error", text: "Erro: " + err.message });
-    }
-  };
-
-  return (
-    <div>
-      <SectionTitle>A receber</SectionTitle>
-      <div style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 14, padding: "16px 18px", marginTop: 14 }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 26, fontWeight: 600, color: "#B8862E" }}>R$ {totalPendente.toFixed(2)}</div>
-        <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 4 }}>Total pendente de recebimento</div>
-      </div>
-
-      <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 10 }}>
-        {Object.keys(porCliente).length === 0 && <EmptyState text="Nenhum trabalho para clientes lançado ainda." />}
-        {Object.entries(porCliente).map(([cid, dados]) => {
-          const cliente = clientes.find((c) => c.id === cid);
-          const pendentes = dados.itens.filter((i) => i.status_pagamento === "pendente");
-          return (
-            <div key={cid} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{cliente ? cliente.nome : "Cliente não identificado"}</div>
-                <Badge color={dados.pendente > 0 ? "#B8862E" : "#5BAA47"}>{dados.pendente > 0 ? `R$ ${dados.pendente.toFixed(2)} pendente` : "Em dia"}</Badge>
-              </div>
-              {pendentes.length > 0 && (
-                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                  {pendentes.map((a) => {
-                    const m = maquinas.find((mm) => mm.id === a.maquina_id);
-                    return (
-                      <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "#6E7A61" }}>
-                        <span>
-                          {formatDataBR(a.data)} • {m ? m.nome : ""} • R$ {Number(a.valor_total || 0).toFixed(2)}
-                        </span>
-                        <button
-                          onClick={() => marcarPago(a)}
-                          style={{ background: "rgba(91,170,71,0.15)", border: "1px solid #5BAA47", borderRadius: 8, padding: "4px 10px", color: "#3E7C36", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
-                        >
-                          Marcar pago
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={{ marginTop: 24 }}>
-        <MaquinaClientesSecao clientes={clientes} apiFetch={apiFetch} reload={reload} setBanner={setBanner} />
-      </div>
-    </div>
-  );
-}
-
-function MaquinaClientesSecao({ clientes, apiFetch, reload, setBanner }) {
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ nome: "", telefone: "", cidade: "", observacoes: "" });
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!form.nome.trim()) {
-      setBanner({ type: "error", text: "Informe o nome do cliente." });
-      return;
-    }
-    setSaving(true);
-    try {
-      await apiFetch(`/rest/v1/maquina_clientes`, {
-        method: "POST",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({ nome: form.nome.trim(), telefone: form.telefone || null, cidade: form.cidade || null, observacoes: form.observacoes || null }),
-      });
-      setBanner({ type: "success", text: "Cliente cadastrado." });
-      setForm({ nome: "", telefone: "", cidade: "", observacoes: "" });
-      setShowForm(false);
-      reload();
-    } catch (err) {
-      setBanner({ type: "error", text: "Erro ao salvar: " + err.message });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const excluir = async (c) => {
-    if (!window.confirm(`Excluir o cliente "${c.nome}"?`)) return;
-    try {
-      await apiFetch(`/rest/v1/maquina_clientes?id=eq.${c.id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
-      setBanner({ type: "success", text: "Cliente excluído." });
-      reload();
-    } catch (err) {
-      setBanner({ type: "error", text: "Erro ao excluir: " + err.message });
-    }
-  };
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <SectionTitle>Clientes ({clientes.length})</SectionTitle>
-        <IconButton onClick={() => setShowForm((v) => !v)} active={showForm} />
-      </div>
-      {showForm && (
-        <form onSubmit={submit} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 14, padding: 18, marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
-          <Field label="Nome" value={form.nome} onChange={(v) => setForm({ ...form, nome: v })} required />
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <Field label="Telefone" value={form.telefone} onChange={(v) => setForm({ ...form, telefone: v })} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <Field label="Cidade" value={form.cidade} onChange={(v) => setForm({ ...form, cidade: v })} />
-            </div>
-          </div>
-          <Field label="Observações" value={form.observacoes} onChange={(v) => setForm({ ...form, observacoes: v })} />
-          <SaveButton saving={saving} />
-        </form>
-      )}
-      <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-        {clientes.length === 0 && <EmptyState text="Nenhum cliente cadastrado ainda." />}
-        {clientes.map((c) => (
-          <div key={c.id} style={{ background: "#FFFFFF", border: "1px solid rgba(11,61,46,0.12)", borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{c.nome}</div>
-              <div style={{ fontSize: 12, color: "#6E7A61", marginTop: 2 }}>{[c.telefone, c.cidade].filter(Boolean).join(" • ") || "Sem detalhes"}</div>
-            </div>
-            <button
-              onClick={() => excluir(c)}
-              style={{ background: "rgba(196,100,75,0.15)", border: "1px solid #B5453A", borderRadius: 8, padding: "6px 10px", color: "#A83B2E", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-            >
-              Excluir
-            </button>
-          </div>
-        ))}
       </div>
     </div>
   );
