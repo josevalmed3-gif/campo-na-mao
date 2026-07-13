@@ -273,6 +273,40 @@ function formatDataBR(dataISO) {
   return `${dia}/${mes}/${ano}`;
 }
 
+// ---------------- SESSÃO: manter login após F5 ----------------
+const AUTH_STORAGE_KEY = "campo_na_mao_auth";
+
+function saveAuthSession(session) {
+  try {
+    if (typeof window === "undefined" || !session || !session.refresh_token) return;
+    window.localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        user: session.user,
+      })
+    );
+  } catch (e) {}
+}
+
+function loadAuthSession() {
+  try {
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearAuthSession() {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch (e) {}
+}
+
 function RebanhoApp() {
   const [session, setSession] = useState(null); // { access_token, user }
   const [profile, setProfile] = useState(null); // { nome, role }
@@ -334,7 +368,27 @@ function RebanhoApp() {
         setRecoverySession(true);
         window.history.replaceState(null, "", window.location.pathname);
       }
+      return;
     }
+
+    const stored = loadAuthSession();
+    if (!stored || !stored.refresh_token) return;
+    fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: stored.refresh_token }),
+    })
+      .then((res) => res.json().then((j) => ({ ok: res.ok, j })))
+      .then(({ ok, j }) => {
+        if (ok && j.access_token) {
+          const novaSessao = { access_token: j.access_token, refresh_token: j.refresh_token, user: j.user };
+          setSession(novaSessao);
+          saveAuthSession(novaSessao);
+        } else {
+          clearAuthSession();
+        }
+      })
+      .catch(() => clearAuthSession());
   }, []);
 
   const uploadFoto = useCallback(
@@ -642,7 +696,8 @@ function RebanhoApp() {
           setAuthLoading(false);
           return;
         }
-        setSession({ access_token: j.access_token, user: j.user });
+        setSession({ access_token: j.access_token, refresh_token: j.refresh_token, user: j.user });
+        saveAuthSession({ access_token: j.access_token, refresh_token: j.refresh_token, user: j.user });
       } else {
         const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
           method: "POST",
@@ -651,7 +706,8 @@ function RebanhoApp() {
         });
         const j = await res.json();
         if (!res.ok) throw new Error(j.msg || j.error_description || "E-mail ou senha inválidos");
-        setSession({ access_token: j.access_token, user: j.user });
+        setSession({ access_token: j.access_token, refresh_token: j.refresh_token, user: j.user });
+        saveAuthSession({ access_token: j.access_token, refresh_token: j.refresh_token, user: j.user });
       }
     } catch (err) {
       setAuthError(err.message);
@@ -674,6 +730,7 @@ function RebanhoApp() {
   }, [session, apiFetch]);
 
   const logout = () => {
+    clearAuthSession();
     setSession(null);
     setProfile(null);
     setAnimals([]);
