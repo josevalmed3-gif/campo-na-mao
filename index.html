@@ -482,22 +482,56 @@ function RebanhoApp() {
     [session]
   );
 
+  const refreshSession = useCallback(async () => {
+    const stored = loadAuthSession();
+    const refresh_token = session?.refresh_token || stored?.refresh_token;
+    if (!refresh_token) return null;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.access_token) return null;
+      const novaSessao = { access_token: j.access_token, refresh_token: j.refresh_token, user: j.user };
+      setSession(novaSessao);
+      saveAuthSession(novaSessao);
+      return novaSessao.access_token;
+    } catch (e) {
+      return null;
+    }
+  }, [session]);
+
   const apiFetch = useCallback(
     async (path, options = {}) => {
       const method = (options.method || "GET").toUpperCase();
       if (profileRef.current?.role === "visualizador" && method !== "GET") {
         throw new Error("Seu usuário é somente visualização. Peça a um administrador para fazer essa alteração.");
       }
+      const fazerRequisicao = (tokenAtual) =>
+        fetch(`${SUPABASE_URL}${path}`, {
+          ...options,
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${tokenAtual}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+
       const token = session?.access_token || SUPABASE_KEY;
-      const res = await fetch(`${SUPABASE_URL}${path}`, {
-        ...options,
-        headers: {
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          ...(options.headers || {}),
-        },
-      });
+      let res = await fazerRequisicao(token);
+
+      // Em caso de token rejeitado (ex.: pequena dessincronização de relógio, token perto de expirar),
+      // tenta renovar a sessão silenciosamente e repetir a requisição uma única vez antes de desistir.
+      if (!res.ok && (res.status === 401 || res.status === 403) && session?.refresh_token) {
+        const novoToken = await refreshSession();
+        if (novoToken) {
+          res = await fazerRequisicao(novoToken);
+        }
+      }
+
       if (!res.ok) {
         let msg = `Erro ${res.status}`;
         try {
@@ -509,7 +543,7 @@ function RebanhoApp() {
       const text = await res.text();
       return text ? JSON.parse(text) : null;
     },
-    [session]
+    [session, refreshSession]
   );
 
   const loadAll = useCallback(async () => {
