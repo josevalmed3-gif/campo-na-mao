@@ -7973,6 +7973,9 @@ function RelatorioAvesSecao({ lotes, producao, mortalidade, racao, vendasOvos, v
   const vendasOvosPeriodo = vendasOvos.filter((v) => periodo.inRange(v.data));
   const totalDuzias = vendasOvosPeriodo.reduce((s, v) => s + Number(v.quantidade_duzias || 0), 0);
   const receitaOvos = vendasOvosPeriodo.reduce((s, v) => s + Number(v.valor_total || 0), 0);
+  const totalOvosVendidosUn = totalDuzias * 12;
+  const saldoOvos = totalOvos - totalOvosVendidosUn;
+  const precoMedioDuzia = totalDuzias > 0 ? receitaOvos / totalDuzias : null;
 
   // Vendas de aves
   const vendasAnimaisPeriodo = (vendasAnimais || []).filter((v) => periodo.inRange(v.data));
@@ -8012,6 +8015,28 @@ function RelatorioAvesSecao({ lotes, producao, mortalidade, racao, vendasOvos, v
             <IndicadorCard label="Ovos vendidos" value={`${fmtN(totalDuzias, 0)} dúzias`} sub={fmtR(receitaOvos)} color="#5BAA47" />
             <IndicadorCard label="Aves vendidas" value={totalAvesVendidas} sub={fmtR(receitaAves)} color="#5BAA47" />
             <IndicadorCard label="Receita total de aves" value={fmtR(receitaTotal)} color="#5BAA47" />
+          </IndicadoresGrupo>
+
+          <IndicadoresGrupo titulo="Balanço de ovos (coletados x vendidos)">
+            <IndicadorCard label="Ovos coletados" value={`${fmtN(totalOvos, 0)} un`} color="#8C6A3F" />
+            <IndicadorCard
+              label="Ovos vendidos"
+              value={`${fmtN(totalOvosVendidosUn, 0)} un`}
+              sub={`${fmtN(totalDuzias, 0)} dúzias`}
+              color="#5BAA47"
+            />
+            <IndicadorCard
+              label="Saldo (estoque do período)"
+              value={`${saldoOvos >= 0 ? "+" : ""}${fmtN(saldoOvos, 0)} un`}
+              sub={saldoOvos >= 0 ? "Coletado a mais do que vendido" : "Vendido a mais do que coletado no período"}
+              color={saldoOvos >= 0 ? "#1F3324" : "#B5453A"}
+            />
+            <IndicadorCard
+              label="Preço médio da dúzia"
+              value={precoMedioDuzia != null ? fmtR(precoMedioDuzia) : "—"}
+              sub={fmtR(receitaOvos) + " no período"}
+              color="#5BAA47"
+            />
           </IndicadoresGrupo>
 
           {datasOrdenadas.length > 0 && (
